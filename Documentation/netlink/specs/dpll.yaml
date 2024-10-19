@@ -274,6 +274,7 @@ attribute-sets:
       -
         name: capabilities
         type: u32
+        enum: pin-capabilities
       -
         name: parent-device
         type: nest
@@ -374,8 +375,6 @@ operations:
             - type
 
       dump:
-        pre: dpll-lock-dumpit
-        post: dpll-unlock-dumpit
         reply: *dev-attrs
 
     -
@@ -462,8 +461,6 @@ operations:
             - phase-adjust
 
       dump:
-        pre: dpll-lock-dumpit
-        post: dpll-unlock-dumpit
         request:
           attributes:
             - id

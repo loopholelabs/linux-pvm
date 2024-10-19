@@ -5,7 +5,7 @@
  * Copyright 2006-2010	Johannes Berg <johannes@sipsolutions.net>
  * Copyright 2013-2015  Intel Mobile Communications GmbH
  * Copyright (C) 2015-2017 Intel Deutschland GmbH
- * Copyright (C) 2018-2022 Intel Corporation
+ * Copyright (C) 2018-2024 Intel Corporation
  */
 
 #include <linux/ieee80211.h>
@@ -987,7 +987,8 @@ static int
 ieee80211_set_unsol_bcast_probe_resp(struct ieee80211_sub_if_data *sdata,
 				     struct cfg80211_unsol_bcast_probe_resp *params,
 				     struct ieee80211_link_data *link,
-				     struct ieee80211_bss_conf *link_conf)
+				     struct ieee80211_bss_conf *link_conf,
+				     u64 *changed)
 {
 	struct unsol_bcast_probe_resp_data *new, *old = NULL;
 
@@ -1011,7 +1012,8 @@ ieee80211_set_unsol_bcast_probe_resp(struct ieee80211_sub_if_data *sdata,
 		RCU_INIT_POINTER(link->u.ap.unsol_bcast_probe_resp, NULL);
 	}
 
-	return BSS_CHANGED_UNSOL_BCAST_PROBE_RESP;
+	*changed |= BSS_CHANGED_UNSOL_BCAST_PROBE_RESP;
+	return 0;
 }
 
 static int ieee80211_set_ftm_responder_params(
@@ -1450,10 +1452,9 @@ static int ieee80211_start_ap(struct wiphy *wiphy, struct net_device *dev,
 
 	err = ieee80211_set_unsol_bcast_probe_resp(sdata,
 						   &params->unsol_bcast_probe_resp,
-						   link, link_conf);
+						   link, link_conf, &changed);
 	if (err < 0)
 		goto error;
-	changed |= err;
 
 	err = drv_start_ap(sdata->local, sdata, link_conf);
 	if (err) {
@@ -1525,10 +1526,9 @@ static int ieee80211_change_beacon(struct wiphy *wiphy, struct net_device *dev,
 
 	err = ieee80211_set_unsol_bcast_probe_resp(sdata,
 						   &params->unsol_bcast_probe_resp,
-						   link, link_conf);
+						   link, link_conf, &changed);
 	if (err < 0)
 		return err;
-	changed |= err;
 
 	if (beacon->he_bss_color_valid &&
 	    beacon->he_bss_color.enabled != link_conf->he_bss_color.enabled) {
@@ -1869,6 +1869,8 @@ static int sta_link_apply_parameters(struct ieee80211_local *local,
 					      sband->band);
 	}
 
+	ieee80211_sta_init_nss(link_sta);
+
 	return ret;
 }
 
@@ -2162,15 +2164,14 @@ static int ieee80211_change_station(struct wiphy *wiphy,
 		}
 
 		if (sta->sdata->vif.type == NL80211_IFTYPE_AP_VLAN &&
-		    sta->sdata->u.vlan.sta) {
-			ieee80211_clear_fast_rx(sta);
+		    sta->sdata->u.vlan.sta)
 			RCU_INIT_POINTER(sta->sdata->u.vlan.sta, NULL);
-		}
 
 		if (test_sta_flag(sta, WLAN_STA_AUTHORIZED))
 			ieee80211_vif_dec_num_mcast(sta->sdata);
 
 		sta->sdata = vlansdata;
+		ieee80211_check_fast_rx(sta);
 		ieee80211_check_fast_xmit(sta);
 
 		if (test_sta_flag(sta, WLAN_STA_AUTHORIZED)) {

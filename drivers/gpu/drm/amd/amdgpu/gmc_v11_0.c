@@ -570,6 +570,7 @@ static void gmc_v11_0_set_mmhub_funcs(struct amdgpu_device *adev)
 		adev->mmhub.funcs = &mmhub_v3_0_2_funcs;
 		break;
 	case IP_VERSION(3, 3, 0):
+	case IP_VERSION(3, 3, 1):
 		adev->mmhub.funcs = &mmhub_v3_3_funcs;
 		break;
 	default:
@@ -941,6 +942,11 @@ static int gmc_v11_0_hw_fini(void *handle)
 	}
 
 	amdgpu_irq_put(adev, &adev->gmc.vm_fault, 0);
+
+	if (adev->gmc.ecc_irq.funcs &&
+		amdgpu_ras_is_supported(adev, AMDGPU_RAS_BLOCK__UMC))
+		amdgpu_irq_put(adev, &adev->gmc.ecc_irq, 0);
+
 	gmc_v11_0_gart_disable(adev);
 
 	return 0;

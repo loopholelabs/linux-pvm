@@ -2865,6 +2865,8 @@ struct cfg80211_bss_ies {
  *	own the beacon_ies, but they're just pointers to the ones from the
  *	@hidden_beacon_bss struct)
  * @proberesp_ies: the information elements from the last Probe Response frame
+ * @proberesp_ecsa_stuck: ECSA element is stuck in the Probe Response frame,
+ *	cannot rely on it having valid data
  * @hidden_beacon_bss: in case this BSS struct represents a probe response from
  *	a BSS that hides the SSID in its beacon, this points to the BSS struct
  *	that holds the beacon data. @beacon_ies is still valid, of course, and
@@ -2899,6 +2901,8 @@ struct cfg80211_bss {
 	u8 bssid[ETH_ALEN];
 	u8 chains;
 	s8 chain_signal[IEEE80211_MAX_CHAINS];
+
+	u8 proberesp_ecsa_stuck:1;
 
 	u8 bssid_index;
 	u8 max_bssid_indicator;
@@ -4910,6 +4914,7 @@ struct cfg80211_ops {
  *	NL80211_REGDOM_SET_BY_DRIVER.
  * @WIPHY_FLAG_CHANNEL_CHANGE_ON_BEACON: reg_call_notifier() is called if driver
  *	set this flag to update channels on beacon hints.
+ * @WIPHY_FLAG_DISABLE_WEXT: disable wireless extensions for this device
  */
 enum wiphy_flags {
 	WIPHY_FLAG_SUPPORTS_EXT_KEK_KCK		= BIT(0),
@@ -4921,6 +4926,7 @@ enum wiphy_flags {
 	WIPHY_FLAG_4ADDR_STATION		= BIT(6),
 	WIPHY_FLAG_CONTROL_PORT_PROTOCOL	= BIT(7),
 	WIPHY_FLAG_IBSS_RSN			= BIT(8),
+	WIPHY_FLAG_DISABLE_WEXT			= BIT(9),
 	WIPHY_FLAG_MESH_AUTH			= BIT(10),
 	WIPHY_FLAG_SUPPORTS_EXT_KCK_32          = BIT(11),
 	/* use hole at 12 */

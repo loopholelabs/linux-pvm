@@ -344,7 +344,7 @@ int iwl_mvm_mac_setup_register(struct iwl_mvm *mvm)
 	if (mvm->mld_api_is_used && mvm->nvm_data->sku_cap_11be_enable &&
 	    !iwlwifi_mod_params.disable_11ax &&
 	    !iwlwifi_mod_params.disable_11be)
-		hw->wiphy->flags |= WIPHY_FLAG_SUPPORTS_MLO;
+		hw->wiphy->flags |= WIPHY_FLAG_DISABLE_WEXT;
 
 	/* With MLD FW API, it tracks timing by itself,
 	 * no need for any timing from the host
@@ -1586,7 +1586,8 @@ static int iwl_mvm_mac_add_interface(struct ieee80211_hw *hw,
 	 */
 	if (vif->type == NL80211_IFTYPE_AP ||
 	    vif->type == NL80211_IFTYPE_ADHOC) {
-		iwl_mvm_vif_dbgfs_add_link(mvm, vif);
+		if (!test_bit(IWL_MVM_STATUS_IN_HW_RESTART, &mvm->status))
+			iwl_mvm_vif_dbgfs_add_link(mvm, vif);
 		ret = 0;
 		goto out;
 	}
@@ -1626,7 +1627,8 @@ static int iwl_mvm_mac_add_interface(struct ieee80211_hw *hw,
 			iwl_mvm_chandef_get_primary_80(&vif->bss_conf.chandef);
 	}
 
-	iwl_mvm_vif_dbgfs_add_link(mvm, vif);
+	if (!test_bit(IWL_MVM_STATUS_IN_HW_RESTART, &mvm->status))
+		iwl_mvm_vif_dbgfs_add_link(mvm, vif);
 
 	if (!test_bit(IWL_MVM_STATUS_IN_HW_RESTART, &mvm->status) &&
 	    vif->type == NL80211_IFTYPE_STATION && !vif->p2p &&
@@ -3671,6 +3673,9 @@ iwl_mvm_sta_state_notexist_to_none(struct iwl_mvm *mvm,
 					   NL80211_TDLS_SETUP);
 	}
 
+	if (ret)
+		return ret;
+
 	for_each_sta_active_link(vif, sta, link_sta, i)
 		link_sta->agg.max_rc_amsdu_len = 1;
 
@@ -3678,6 +3683,19 @@ iwl_mvm_sta_state_notexist_to_none(struct iwl_mvm *mvm,
 
 	if (vif->type == NL80211_IFTYPE_STATION && !sta->tdls)
 		mvmvif->ap_sta = sta;
+
+	/*
+	 * Initialize the rates here already - this really tells
+	 * the firmware only what the supported legacy rates are
+	 * (may be) since it's initialized already from what the
+	 * AP advertised in the beacon/probe response. This will
+	 * allow the firmware to send auth/assoc frames with one
+	 * of the supported rates already, rather than having to
+	 * use a mandatory rate.
+	 * If we're the AP, we'll just assume mandatory rates at
+	 * this point, but we know nothing about the STA anyway.
+	 */
+	iwl_mvm_rs_rate_init_all_links(mvm, vif, sta);
 
 	return 0;
 }
@@ -3777,13 +3795,17 @@ iwl_mvm_sta_state_assoc_to_authorized(struct iwl_mvm *mvm,
 
 	mvm_sta->authorized = true;
 
-	iwl_mvm_rs_rate_init_all_links(mvm, vif, sta);
-
 	/* MFP is set by default before the station is authorized.
 	 * Clear it here in case it's not used.
 	 */
-	if (!sta->mfp)
-		return callbacks->update_sta(mvm, vif, sta);
+	if (!sta->mfp) {
+		int ret = callbacks->update_sta(mvm, vif, sta);
+
+		if (ret)
+			return ret;
+	}
+
+	iwl_mvm_rs_rate_init_all_links(mvm, vif, sta);
 
 	return 0;
 }
