@@ -2318,10 +2318,6 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 				if (pvm_disallowed_va(vcpu, next_addr))
 					continue;
 
-				trace_kvm_page_fault(vcpu, next_addr, error_code);
-
-				if (kvm_event_needs_reinjection(vcpu))
-					kvm_mmu_unprotect_page_virt(vcpu, next_addr);
 				if (kvm_mmu_page_fault(vcpu, next_addr, error_code, NULL, 0))
 					break;
 			}
