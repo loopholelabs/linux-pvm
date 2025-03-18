@@ -86,7 +86,7 @@ int host_mmu_init(void);
 #define MIN_HOST_PCID_FOR_GUEST			HOST_PCID_TAG_FOR_GUEST
 #define NUM_HOST_PCID_FOR_GUEST			HOST_PCID_TAG_FOR_GUEST
 
-#define TLB_REUSE_THRESHOLD 100 /* Number of page table operations */
+#define TLB_REUSE_THRESHOLD 5 /* Number of page table operations */
 
 struct vcpu_pvm {
 	struct kvm_vcpu vcpu;

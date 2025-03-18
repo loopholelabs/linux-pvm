@@ -37,7 +37,7 @@ static bool __read_mostly enable_pgtbl_preload = 0;
 module_param_named(pgtbl_preload, enable_pgtbl_preload, bool, 0444);
 
 static bool __read_mostly enable_batch_tlb_flush = 0;
-module_param_named(batch_tlb_flush, enable_batch_tlb_flush, bool, 0444);
+module_param_named(batch_tlb_flush, enable_batch_tlb_flush, bool, 0644);
 
 static bool __read_mostly is_intel;
 
