@@ -36,8 +36,8 @@ module_param_named(cpuid_intercept, enable_cpuid_intercept, bool, 0444);
 static bool __read_mostly enable_pgtbl_preload = 0;
 module_param_named(pgtbl_preload, enable_pgtbl_preload, bool, 0444);
 
-static unsigned int __read_mostly batch_page_fault = 0;
-module_param_named(batch_page_fault_max, batch_page_fault, unsigned int, 0444);
+static int __read_mostly batch_page_fault = 0;
+module_param_named(batch_page_fault_max, batch_page_fault, int, 0444);
 
 static bool __read_mostly is_intel;
 
