@@ -86,8 +86,6 @@ int host_mmu_init(void);
 #define MIN_HOST_PCID_FOR_GUEST			HOST_PCID_TAG_FOR_GUEST
 #define NUM_HOST_PCID_FOR_GUEST			HOST_PCID_TAG_FOR_GUEST
 
-#define TLB_REUSE_THRESHOLD 5 /* Number of page table operations */
-
 struct vcpu_pvm {
 	struct kvm_vcpu vcpu;
 
@@ -155,12 +153,6 @@ struct vcpu_pvm {
 	struct desc_ptr idt_ptr;
 	struct desc_ptr gdt_ptr;
 	struct desc_struct tls_array[GDT_ENTRY_TLS_ENTRIES];
-
-        // TLB optimization tracking
-        u64 last_root_hpa;
-        u32 last_host_pcid;
-        unsigned long tlb_gen_count;
-        unsigned long last_pgtbl_gen;
 };
 
 struct kvm_pvm {
