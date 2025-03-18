@@ -790,8 +790,8 @@ static void pvm_set_host_cr3_for_guest_with_host_pcid(struct vcpu_pvm *pvm)
 	u64 root_hpa = pvm->vcpu.arch.mmu->root.hpa;
 	bool flush = false;
 	u32 host_pcid = host_pcid_get(pvm, root_hpa, &flush);
-        u64 hw_cr3 = root_hpa | host_pcid;
-        u64 switch_host_cr3;
+	u64 hw_cr3 = root_hpa | host_pcid;
+	u64 switch_host_cr3;
 
 	if (!flush)
 		hw_cr3 |= CR3_NOFLUSH;
