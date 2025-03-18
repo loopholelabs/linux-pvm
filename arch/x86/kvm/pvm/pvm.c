@@ -36,8 +36,8 @@ module_param_named(cpuid_intercept, enable_cpuid_intercept, bool, 0444);
 static bool __read_mostly enable_pgtbl_preload = 0;
 module_param_named(pgtbl_preload, enable_pgtbl_preload, bool, 0444);
 
-static unsigned int __read_mostly batch_page_fault_max = 0;
-module_param_named(batch_page_fault_max, batch_page_fault_max, unsigned int, 0444);
+static unsigned int __read_mostly batch_page_fault = 0;
+module_param_named(batch_page_fault_max, batch_page_fault, unsigned int, 0444);
 
 static bool __read_mostly is_intel;
 
@@ -2299,20 +2299,19 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 		if (err)
 			return err;
 
-		if (batch_page_fault_max > 0 && !vcpu->arch.apf.host_apf_flags) {
-			unsigned long base_addr = pvm->exit_cr2 & PAGE_MASK;;
-			unsigned long next_addr;
+		if (batch_page_fault > 0 && !vcpu->arch.apf.host_apf_flags) {
+			u64 next_addr;
 			int batch_count;
 
 			// Try to prefault nearby pages
-			for (batch_count = 1; batch_count < batch_page_fault_max; batch_count++) {
+			for (batch_count = 1; batch_count < batch_page_fault; batch_count++) {
 				// Check both forward and backward from fault address
 				if (batch_count % 2 == 1) {
 					// Forward page
-					next_addr = base_addr + (batch_count / 2 + 1) * PAGE_SIZE;
+					next_addr = pvm->exit_cr2 + (batch_count / 2 + 1) * PAGE_SIZE;
 				} else {
 					// Backward page
-					next_addr = base_addr - (batch_count / 2) * PAGE_SIZE;
+					next_addr = pvm->exit_cr2 - (batch_count / 2) * PAGE_SIZE;
 				}
 
 				// Skip if this would be a noncanonical address
@@ -2323,7 +2322,8 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 
 				if (kvm_event_needs_reinjection(vcpu))
 					kvm_mmu_unprotect_page_virt(vcpu, next_addr);
-				kvm_mmu_page_fault(vcpu, next_addr, error_code, NULL, 0);
+				if (kvm_mmu_page_fault(vcpu, next_addr, error_code, NULL, 0))
+					break;
 			}
 		}
 
