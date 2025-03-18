@@ -794,12 +794,11 @@ static void pvm_set_host_cr3_for_guest_with_host_pcid(struct vcpu_pvm *pvm)
 	bool flush = false;
 	u32 host_pcid;
         u64 switch_host_cr3;
-        u64 hw_cr3 = root_hpa | host_pcid;
          
         // tlb cache generation distance
         unsigned long gen_distance = pvm->tlb_gen_count - pvm->last_pgtbl_gen;
 
-        if (enable_batch_tlb_flush && pvm->last_root_hpa == root_hpa && gen_distance < TLB_REUSE_THRESHOLD) {
+        if (enable_batch_tlb_flush && pvm->last_root_hpa == root_hpa && gen_distance < TLB_REUSE_THRESHOLD && pvm->last_host_pcid != 0) {
                 // We recently used this page table, definitely avoid flush
                 host_pcid = pvm->last_host_pcid;
                 flush = false;
@@ -811,6 +810,7 @@ static void pvm_set_host_cr3_for_guest_with_host_pcid(struct vcpu_pvm *pvm)
         }
 	
         pvm->tlb_gen_count++; // Increment TLB generation
+        u64 hw_cr3 = root_hpa | host_pcid;
 
 	if (!flush)
 		hw_cr3 |= CR3_NOFLUSH;
