@@ -2318,8 +2318,9 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 				if (pvm_disallowed_va(vcpu, next_addr))
 					continue;
 
-				if (kvm_mmu_page_fault(vcpu, next_addr, error_code, NULL, 0))
-					break;
+				local_irq_disable();
+				kvm_async_pf_task_wait_schedule(next_addr);
+				local_irq_enable();
 			}
 		}
 
