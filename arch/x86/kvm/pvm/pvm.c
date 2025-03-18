@@ -37,7 +37,7 @@ static bool __read_mostly enable_pgtbl_preload = 0;
 module_param_named(pgtbl_preload, enable_pgtbl_preload, bool, 0444);
 
 static bool __read_mostly enable_batch_tlb_flush = 0;
-module_param_named(batch_tlb_flush, enable_batch_tlb_flush, bool, 0644);
+module_param_named(batch_tlb_flush, enable_batch_tlb_flush, bool, 0444);
 
 static bool __read_mostly is_intel;
 
@@ -792,25 +792,25 @@ static void pvm_set_host_cr3_for_guest_with_host_pcid(struct vcpu_pvm *pvm)
 {
 	u64 root_hpa = pvm->vcpu.arch.mmu->root.hpa;
 	bool flush = false;
-	u32 host_pcid;
+	u32 host_pcid = host_pcid_get(pvm, root_hpa, &flush);
+        u64 hw_cr3 = root_hpa | host_pcid;
         u64 switch_host_cr3;
          
-        // tlb cache generation distance
-        unsigned long gen_distance = pvm->tlb_gen_count - pvm->last_pgtbl_gen;
+        if (enable_batch_tlb_flush) {
+                // tlb cache generation distance
+                unsigned long gen_distance = pvm->tlb_gen_count - pvm->last_pgtbl_gen;
+                
+                // increment tlb generation
+                pvm->tlb_gen_count++;
 
-        if (enable_batch_tlb_flush && pvm->last_root_hpa == root_hpa && gen_distance < TLB_REUSE_THRESHOLD && pvm->last_host_pcid != 0) {
-                // We recently used this page table, definitely avoid flush
-                host_pcid = pvm->last_host_pcid;
-                flush = false;
-        } else {
-                host_pcid = host_pcid_get(pvm, root_hpa, &flush);
+                if (pvm->last_root_hpa == root_hpa && pvm->last_host_pcid == host_pcid && gen_distance < TLB_REUSE_THRESHOLD) {
+                        flush = false;
+                }
+                
                 pvm->last_root_hpa = root_hpa;
                 pvm->last_host_pcid = host_pcid;
                 pvm->last_pgtbl_gen = pvm->tlb_gen_count;
         }
-	
-        pvm->tlb_gen_count++; // Increment TLB generation
-        u64 hw_cr3 = root_hpa | host_pcid;
 
 	if (!flush)
 		hw_cr3 |= CR3_NOFLUSH;
