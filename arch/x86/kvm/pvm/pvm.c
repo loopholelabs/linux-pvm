@@ -36,6 +36,9 @@ module_param_named(cpuid_intercept, enable_cpuid_intercept, bool, 0444);
 static bool __read_mostly enable_pgtbl_preload = 0;
 module_param_named(pgtbl_preload, enable_pgtbl_preload, bool, 0444);
 
+static bool __read_mostly enable_batch_tlb_flush = 0;
+module_param_named(batch_tlb_flush, enable_batch_tlb_flush, bool, 0444);
+
 static bool __read_mostly is_intel;
 
 static unsigned long host_idt_base;
@@ -789,9 +792,25 @@ static void pvm_set_host_cr3_for_guest_with_host_pcid(struct vcpu_pvm *pvm)
 {
 	u64 root_hpa = pvm->vcpu.arch.mmu->root.hpa;
 	bool flush = false;
-	u32 host_pcid = host_pcid_get(pvm, root_hpa, &flush);
-	u64 hw_cr3 = root_hpa | host_pcid;
-	u64 switch_host_cr3;
+	u32 host_pcid;
+        u64 switch_host_cr3;
+        u64 hw_cr3 = root_hpa | host_pcid;
+         
+        // tlb cache generation distance
+        unsigned long gen_distance = pvm->tlb_gen_count - pvm->last_pgtbl_gen;
+
+        if (enable_batch_tlb_flush && pvm->last_root_hpa == root_hpa && gen_distance < TLB_REUSE_THRESHOLD) {
+                // We recently used this page table, definitely avoid flush
+                host_pcid = pvm->last_host_pcid;
+                flush = false;
+        } else {
+                host_pcid = host_pcid_get(pvm, root_hpa, &flush);
+                pvm->last_root_hpa = root_hpa;
+                pvm->last_host_pcid = host_pcid;
+                pvm->last_pgtbl_gen = pvm->tlb_gen_count;
+        }
+	
+        pvm->tlb_gen_count++; // Increment TLB generation
 
 	if (!flush)
 		hw_cr3 |= CR3_NOFLUSH;
@@ -2860,6 +2879,12 @@ static void pvm_vcpu_reset(struct kvm_vcpu *vcpu, bool init_event)
 	pvm->msr_rets_rip_plus2 = 0;
 	pvm->msr_switch_cr3 = 0;
 	pvm_set_default_msr_linear_address_range(pvm);
+
+        // Initialize TLB optimization tracking fields
+        pvm->last_root_hpa = 0;
+        pvm->last_host_pcid = 0;
+        pvm->tlb_gen_count = 0;
+        pvm->last_pgtbl_gen = 0;
 }
 
 static int pvm_vcpu_create(struct kvm_vcpu *vcpu)
