@@ -2323,7 +2323,7 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 			}
 		}
 
-		return 1;
+		return err;
 	case GP_VECTOR:
 		if (is_smod(pvm) && handle_synthetic_instruction_pvm_cpuid(vcpu))
 			return 1;
