@@ -36,9 +36,109 @@ module_param_named(cpuid_intercept, enable_cpuid_intercept, bool, 0444);
 static bool __read_mostly enable_pgtbl_preload = 0;
 module_param_named(pgtbl_preload, enable_pgtbl_preload, bool, 0444);
 
+static unsigned int __read_mostly batch_page_fault_max = 0;
+module_param_named(batch_page_fault_max, batch_page_fault_max, unsigned int, 0444);
+
 static bool __read_mostly is_intel;
 
 static unsigned long host_idt_base;
+
+// Shadow page table walking iterator
+#define for_each_shadow_entry(vcpu, addr, iterator)           \
+for (shadow_walk_init(&(iterator), vcpu, addr);           \
+shadow_walk_okay(&(iterator));                       \
+shadow_walk_next(&(iterator)))
+
+static void shadow_walk_init(struct kvm_shadow_walk_iterator *iterator,
+						   struct kvm_vcpu *vcpu, u64 addr)
+{
+	iterator->addr = addr;
+	iterator->shadow_addr = vcpu->arch.mmu->root.hpa;
+	iterator->level = vcpu->arch.mmu->shadow_root_level;
+
+	if (!iterator->shadow_addr)
+		iterator->level = 0;
+}
+
+static bool shadow_walk_okay(struct kvm_shadow_walk_iterator *iterator)
+{
+	return iterator->level > 0 && iterator->shadow_addr;
+}
+
+static void shadow_walk_next(struct kvm_shadow_walk_iterator *iterator)
+{
+	u64 *sptep;
+
+	// Access the shadow page table entry
+	sptep = __va(iterator->shadow_addr);
+
+	// Get the index at current level
+	sptep += (iterator->addr >> PAGE_SHIFT) & (PTRS_PER_PTE - 1);
+
+	iterator->sptep = sptep;
+
+	if (!(*sptep & PT_PRESENT_MASK) ||
+		is_last_spte(vcpu, iterator->level, *sptep)) {
+		iterator->level = 0;
+		return;
+		}
+
+	iterator->shadow_addr = *sptep & PT_BASE_ADDR_MASK;
+	iterator->level--;
+}
+
+static bool is_last_spte(struct kvm_vcpu *vcpu, int level, u64 spte)
+{
+	if (level == PT_PAGE_TABLE_LEVEL)
+		return true;
+
+	if (level == PT_DIRECTORY_LEVEL && (spte & PT_PAGE_SIZE_MASK))
+		return true;
+
+	if (vcpu->arch.mmu->root_level >= PT_PDPE_LEVEL &&
+		level == PT_PDPE_LEVEL && (spte & PT_PAGE_SIZE_MASK))
+		return true;
+
+	return false;
+}
+
+static bool is_present_gpte(struct kvm_vcpu *vcpu, gva_t addr)
+{
+	struct kvm_shadow_walk_iterator iterator;
+	u64 spte;
+
+	if (!vcpu->arch.mmu->root.hpa)
+		return false;
+
+	for_each_shadow_entry(vcpu, addr, iterator) {
+		spte = *iterator.sptep;
+		if (!(spte & PT_PRESENT_MASK))
+			return false;
+
+		if (is_last_spte(vcpu, iterator.level, spte))
+			return true;
+	}
+
+	return false;
+}
+
+// Prefault an address by triggering the page fault handler
+static int prefault_address(struct kvm_vcpu *vcpu, gva_t addr)
+{
+	struct x86_exception fault;
+	int r;
+
+	// First, check if the address is valid and not already present
+	if (is_present_gpte(vcpu, addr))
+		return 0;
+
+	// Try to resolve the GVA to GPA (may cause page fault)
+	r = kvm_mmu_page_fault(vcpu, addr, 0, &fault);
+	if (r < 0)
+		return r;
+
+	return 0;
+}
 
 static inline bool is_smod(struct vcpu_pvm *pvm)
 {
@@ -2271,11 +2371,10 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_pvm *pvm = to_pvm(vcpu);
 	struct kvm_run *kvm_run = vcpu->run;
-	u32 vector, error_code;
+	u32 vector = pvm->exit_vector;
+	u32 error_code = pvm->exit_error_code;
+	int batch_count = 0;
 	int err;
-
-	vector = pvm->exit_vector;
-	error_code = pvm->exit_error_code;
 
 	switch (vector) {
 	// #PF, #GP, #UD, #DB and #BP are guest exceptions or hypervisor
@@ -2291,8 +2390,34 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 		if (cpu_feature_enabled(X86_FEATURE_PKU) && (error_code & PFERR_PK_MASK))
 			return 1;
 
-		return kvm_handle_page_fault(vcpu, error_code, pvm->exit_cr2,
-					     NULL, 0);
+		// Handle the initial page fault
+		err = kvm_handle_page_fault(vcpu, error_code, pvm->exit_cr2, NULL, 0);
+		if (err)
+			return err;
+
+		if (batch_page_fault_max > 0 && !is_noncanonical_address(pvm->exit_cr2, vcpu)) {
+			unsigned long next_addr;
+			// Process up to batch_page_fault_max additional faults in the same region
+			for (batch_count = 0; batch_count < batch_page_fault_max; batch_count++) {
+				// Calculate the next potential fault address
+				// Look at nearby addresses that are likely to be accessed soon
+				next_addr = pvm->exit_cr2 + ((batch_count + 1) * PAGE_SIZE);
+
+				// Skip if this would be a noncanonical address
+				if (is_noncanonical_address(next_addr, vcpu))
+					break;
+
+				// Skip if this address is already mapped
+				if (is_present_gpte(vcpu, next_addr))
+					continue;
+
+				// Pre-fault this address (simplified - actual implementation would need more validation)
+				if (prefault_address(vcpu, next_addr) != 0)
+					break;
+			}
+		}
+
+		return 1;
 	case GP_VECTOR:
 		if (is_smod(pvm) && handle_synthetic_instruction_pvm_cpuid(vcpu))
 			return 1;
