@@ -2274,10 +2274,11 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_pvm *pvm = to_pvm(vcpu);
 	struct kvm_run *kvm_run = vcpu->run;
-	u32 vector = pvm->exit_vector;
-	u32 error_code = pvm->exit_error_code;
-	int batch_count = 0;
+	u32 vector, error_code;
 	int err;
+
+	vector = pvm->exit_vector;
+	error_code = pvm->exit_error_code;
 
 	switch (vector) {
 	// #PF, #GP, #UD, #DB and #BP are guest exceptions or hypervisor
