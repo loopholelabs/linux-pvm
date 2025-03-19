@@ -2295,11 +2295,8 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_pvm *pvm = to_pvm(vcpu);
 	struct kvm_run *kvm_run = vcpu->run;
-	struct kvm_memory_slot *slot;
-	gva_t prefetch_addr;
-	gfn_t prefetch_gfn;
 	u32 vector, error_code;
-	int batch_count, err;
+	int err;
 
 	vector = pvm->exit_vector;
 	error_code = pvm->exit_error_code;
