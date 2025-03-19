@@ -38,7 +38,7 @@ static bool __read_mostly enable_pgtbl_preload = 0;
 module_param_named(pgtbl_preload, enable_pgtbl_preload, bool, 0444);
 
 static int __read_mostly batch_page_fault = 0;
-module_param_named(batch_page_fault_max, batch_page_fault, int, 0444);
+module_param_named(batch_page_fault_max, batch_page_fault, int, 0644);
 
 static bool __read_mostly is_intel;
 
@@ -345,7 +345,8 @@ static inline void switch_to_smod(struct kvm_vcpu *vcpu)
         	/* CR3 is already preloaded in TSS, just toggle mode flag */
         	pvm_switch_flags_toggle_mod(pvm);
         	swap(pvm->msr_switch_cr3, vcpu->arch.cr3);
-		pvm_write_guest_gs_base(pvm, pvm->msr_kernel_gs_base);
+
+			pvm_write_guest_gs_base(pvm, pvm->msr_kernel_gs_base);
         	kvm_rsp_write(vcpu, pvm->msr_supervisor_rsp);
         
         	pvm->hw_cs = __USER_CS;
