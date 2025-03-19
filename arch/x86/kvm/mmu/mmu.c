@@ -3030,8 +3030,6 @@ static void __direct_pte_prefetch(struct kvm_vcpu *vcpu,
 	u64 *spte, *start = NULL;
 	int i;
 
-	printk(KERN_INFO "PVM: prefetching direct pte\n");
-
 	WARN_ON_ONCE(!sp->role.direct);
 
 	i = spte_index(sptep) & ~(PTE_PREFETCH_NUM - 1);
