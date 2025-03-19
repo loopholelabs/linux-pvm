@@ -3060,18 +3060,24 @@ static void direct_pte_prefetch(struct kvm_vcpu *vcpu, u64 *sptep)
 	 * actually accessed translations and prefetched, so disable pte
 	 * prefetch if accessed bits aren't available.
 	 */
-	if (sp_ad_disabled(sp))
+	if (sp_ad_disabled(sp)) {
+		printk(KERN_INFO "PVM: Prefetching disabled due to AD bits\n");
 		return;
+	}
 
-	if (sp->role.level > PG_LEVEL_4K)
+	if (sp->role.level > PG_LEVEL_4K) {
+		printk(KERN_INFO "PVM: Prefetching disabled due to large pages\n");
 		return;
+	}
 
 	/*
 	 * If addresses are being invalidated, skip prefetching to avoid
 	 * accidentally prefetching those addresses.
 	 */
-	if (unlikely(vcpu->kvm->mmu_invalidate_in_progress))
+	if (unlikely(vcpu->kvm->mmu_invalidate_in_progress)) {
+		printk(KERN_INFO "PVM: Prefetching disabled due to TLB invalidation\n");
 		return;
+	}
 
 	__direct_pte_prefetch(vcpu, sp, sptep);
 }
