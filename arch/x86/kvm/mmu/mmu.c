@@ -96,9 +96,6 @@ __MODULE_PARM_TYPE(nx_huge_pages_recovery_period_ms, "uint");
 static bool __read_mostly force_flush_and_sync_on_reuse;
 module_param_named(flush_on_reuse, force_flush_and_sync_on_reuse, bool, 0644);
 
-static uint __read_mostly pte_prefetch_num = 8;
-module_param_named(pte_prefetch, pte_prefetch_num, uint, 0644);
-
 /*
  * When setting this variable to true it enables Two-Dimensional-Paging
  * where the hardware walks 2 page tables:
@@ -114,6 +111,9 @@ static bool __ro_after_init tdp_mmu_allowed;
 bool __read_mostly tdp_mmu_enabled = true;
 module_param_named(tdp_mmu, tdp_mmu_enabled, bool, 0444);
 #endif
+
+static int __read_mostly pte_prefetch_num = 8;
+module_param_named(pte_prefetch, pte_prefetch_num, int, 0644);
 
 static int max_huge_page_level __read_mostly;
 static int tdp_root_level __read_mostly;
