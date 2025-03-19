@@ -153,6 +153,8 @@ struct vcpu_pvm {
 	struct desc_ptr idt_ptr;
 	struct desc_ptr gdt_ptr;
 	struct desc_struct tls_array[GDT_ENTRY_TLS_ENTRIES];
+
+	bool prefetch_in_progress;
 };
 
 struct kvm_pvm {

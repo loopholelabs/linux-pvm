@@ -44,8 +44,6 @@ static bool __read_mostly is_intel;
 
 static unsigned long host_idt_base;
 
-static DEFINE_PER_CPU(bool, pvm_prefetch_in_progress);
-
 static inline bool is_smod(struct vcpu_pvm *pvm)
 {
 	unsigned long switch_flags = pvm->switch_flags;
@@ -2321,9 +2319,9 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 		if (cpu_feature_enabled(X86_FEATURE_PKU) && (error_code & PFERR_PK_MASK))
 			return 1;
 
-		if (batch_page_fault > 0 && !__this_cpu_read(pvm_prefetch_in_progress) && !vcpu->arch.apf.host_apf_flags) {
+		if (batch_page_fault > 0 && !pvm->prefetch_in_progress && !vcpu->arch.apf.host_apf_flags) {
 			// Try to prefault nearby pagesi
-			__this_cpu_write(pvm_prefetch_in_progress, true);
+			pvm->prefetch_in_progress = true;
 			for (batch_count = 1; batch_count < batch_page_fault; batch_count++) {
 				// Check both forward and backward from fault address
 				if (batch_count % 2 == 1) {
@@ -2341,7 +2339,7 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 				if (kvm_mmu_page_fault(vcpu, next_addr, prefetch_error_code, NULL, 0))
 					break;
 			}
-			__this_cpu_write(pvm_prefetch_in_progress, false);
+			pvm->prefetch_in_progress = false;
 		}
 
 		return kvm_handle_page_fault(vcpu, error_code, pvm->exit_cr2,
@@ -2938,6 +2936,8 @@ static void pvm_vcpu_reset(struct kvm_vcpu *vcpu, bool init_event)
 	pvm->msr_rets_rip_plus2 = 0;
 	pvm->msr_switch_cr3 = 0;
 	pvm_set_default_msr_linear_address_range(pvm);
+
+	pvm->prefetch_in_progress = false;
 }
 
 static int pvm_vcpu_create(struct kvm_vcpu *vcpu)
