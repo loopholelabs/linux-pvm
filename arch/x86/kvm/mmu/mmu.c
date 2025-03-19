@@ -112,14 +112,11 @@ bool __read_mostly tdp_mmu_enabled = true;
 module_param_named(tdp_mmu, tdp_mmu_enabled, bool, 0444);
 #endif
 
-static int __read_mostly pte_prefetch_num = 8;
-module_param_named(pte_prefetch, pte_prefetch_num, int, 0644);
-
 static int max_huge_page_level __read_mostly;
 static int tdp_root_level __read_mostly;
 static int max_tdp_level __read_mostly;
 
-#define PTE_PREFETCH_NUM		(pte_prefetch_num)
+#define PTE_PREFETCH_NUM		4
 
 #include <trace/events/kvm.h>
 
