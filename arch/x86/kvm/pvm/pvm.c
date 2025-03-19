@@ -2332,14 +2332,16 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 				// Skip if this would be a noncanonical address
 				if (pvm_disallowed_va(vcpu, next_addr))
 					continue;
-				
-				if (kvm_mmu_page_fault(vcpu, next_addr, error_code, NULL, 0))
+			        
+				u64 prefetch_error_code = error_code & ~(PFERR_WRITE_MASK | PFERR_INSTR_MASK);
+	
+				if (kvm_mmu_page_fault(vcpu, next_addr, prefetch_error_code, NULL, 0))
 					break;
 			}
 		}
 
 		return kvm_handle_page_fault(vcpu, error_code, pvm->exit_cr2,
-						NULL, 0);
+					     NULL, 0);
 	case GP_VECTOR:
 		if (is_smod(pvm) && handle_synthetic_instruction_pvm_cpuid(vcpu))
 			return 1;
