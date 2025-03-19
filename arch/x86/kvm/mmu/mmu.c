@@ -116,7 +116,7 @@ static int max_huge_page_level __read_mostly;
 static int tdp_root_level __read_mostly;
 static int max_tdp_level __read_mostly;
 
-#define PTE_PREFETCH_NUM		8
+#define PTE_PREFETCH_NUM		32
 
 #include <trace/events/kvm.h>
 
@@ -3030,6 +3030,8 @@ static void __direct_pte_prefetch(struct kvm_vcpu *vcpu,
 	u64 *spte, *start = NULL;
 	int i;
 
+	printk(KERN_INFO "PVM: prefetching direct pte\n");
+
 	WARN_ON_ONCE(!sp->role.direct);
 
 	i = spte_index(sptep) & ~(PTE_PREFETCH_NUM - 1);
@@ -3061,12 +3063,10 @@ static void direct_pte_prefetch(struct kvm_vcpu *vcpu, u64 *sptep)
 	 * prefetch if accessed bits aren't available.
 	 */
 	if (sp_ad_disabled(sp)) {
-		printk(KERN_INFO "PVM: Prefetching disabled due to AD bits\n");
 		return;
 	}
 
 	if (sp->role.level > PG_LEVEL_4K) {
-		printk(KERN_INFO "PVM: Prefetching disabled due to large pages\n");
 		return;
 	}
 
@@ -3075,11 +3075,8 @@ static void direct_pte_prefetch(struct kvm_vcpu *vcpu, u64 *sptep)
 	 * accidentally prefetching those addresses.
 	 */
 	if (unlikely(vcpu->kvm->mmu_invalidate_in_progress)) {
-		printk(KERN_INFO "PVM: Prefetching disabled due to TLB invalidation\n");
 		return;
 	}
-
-	printk(KERN_INFO "PVM: Prefetching active\n");
 
 	__direct_pte_prefetch(vcpu, sp, sptep);
 }
@@ -5286,13 +5283,10 @@ static void shadow_mmu_init_context(struct kvm_vcpu *vcpu, struct kvm_mmu *conte
 	context->root_role.word = root_role.word;
 
 	if (!is_cr0_pg(context)) {
-		printk(KERN_INFO "PVM: nonpaging context\n");
 		nonpaging_init_context(context);
 	} else if (is_cr4_pae(context)) {
-		printk(KERN_INFO "PVM: paging64 context\n");
 		paging64_init_context(context);
 	} else {
-		printk(KERN_INFO "PVM: paging32 context\n");
 		paging32_init_context(context);
 	}
 
