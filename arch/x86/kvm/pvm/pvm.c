@@ -2298,13 +2298,14 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_pvm *pvm = to_pvm(vcpu);
 	struct kvm_run *kvm_run = vcpu->run;
-	u64 next_addr;
-	u32 vector, error_code, prefetch_error_code;
+	gfn_t prefetch_gfn;
+	kvm_pfn_t prefetch_pfn;
+	struct kvm_memory_slot *slot;
+	u32 vector, error_code;
 	int batch_count, err;
 
 	vector = pvm->exit_vector;
 	error_code = pvm->exit_error_code;
-        prefetch_error_code = error_code & ~(PFERR_WRITE_MASK | PFERR_FETCH_MASK);
 
 	switch (vector) {
 	// #PF, #GP, #UD, #DB and #BP are guest exceptions or hypervisor
@@ -2321,24 +2322,24 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 			return 1;
 
 		if (batch_page_fault > 0 && !pvm->prefetch_in_progress && !vcpu->arch.apf.host_apf_flags) {
-			// Try to prefault nearby pagesi
+			// Try to prefault nearby pages
 			pvm->prefetch_in_progress = true;
-			for (batch_count = 1; batch_count < batch_page_fault; batch_count++) {
-				// Check both forward and backward from fault address
-				if (batch_count % 2 == 1) {
-					// Forward page
-					next_addr = pvm->exit_cr2 + (batch_count / 2 + 1) * PAGE_SIZE;
-				} else {
-					// Backward page
-					next_addr = pvm->exit_cr2 - (batch_count / 2) * PAGE_SIZE;
-				}
+			slot = kvm_vcpu_gfn_to_memslot(vcpu, original_gfn);
+			if (slot) {
+				for (batch_count = 1; batch_count <= batch_page_fault; batch_count++) {
+					prefetch_gfn = (pvm->exit_cr2  >> PAGE_SHIFT) + ((batch_count % 2) == 1 ? (batch_count / 2 + 1) : -(batch_count / 2));
 
-				// Skip if this would be a noncanonical address
-				if (pvm_disallowed_va(vcpu, next_addr))
-					continue;
-			        
-				if (kvm_mmu_page_fault(vcpu, next_addr, prefetch_error_code, NULL, 0))
-					break;
+					/* Check if the GFN is within the memory slot */
+					if (prefetch_gfn < slot->base_gfn || prefetch_gfn >= slot->base_gfn + slot->npages)
+						continue;
+
+					/* Try to get the page with read-only access */
+					prefetch_pfn = gfn_to_pfn_memslot(slot, prefetch_gfn);
+
+					/* Release the page reference immediately */
+					if (!is_error_noslot_pfn(prefetch_pfn))
+						kvm_release_pfn_clean(prefetch_pfn);
+				}
 			}
 			pvm->prefetch_in_progress = false;
 		}
