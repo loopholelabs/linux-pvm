@@ -3079,6 +3079,8 @@ static void direct_pte_prefetch(struct kvm_vcpu *vcpu, u64 *sptep)
 		return;
 	}
 
+	printk(KERN_INFO "PVM: Prefetching active\n");
+
 	__direct_pte_prefetch(vcpu, sp, sptep);
 }
 
