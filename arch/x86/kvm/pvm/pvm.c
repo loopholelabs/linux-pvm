@@ -36,6 +36,9 @@ module_param_named(cpuid_intercept, enable_cpuid_intercept, bool, 0444);
 static bool __read_mostly enable_pgtbl_preload = 0;
 module_param_named(pgtbl_preload, enable_pgtbl_preload, bool, 0444);
 
+static int __read_mostly batch_page_fault = 0;
+module_param_named(batch_page_fault_max, batch_page_fault, int, 0444);
+
 static bool __read_mostly is_intel;
 
 static unsigned long host_idt_base;
@@ -2293,8 +2296,9 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_pvm *pvm = to_pvm(vcpu);
 	struct kvm_run *kvm_run = vcpu->run;
+	u64 next_addr;
 	u32 vector, error_code;
-	int err;
+	int batch_count, err;
 
 	vector = pvm->exit_vector;
 	error_code = pvm->exit_error_code;
@@ -2313,8 +2317,29 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 		if (cpu_feature_enabled(X86_FEATURE_PKU) && (error_code & PFERR_PK_MASK))
 			return 1;
 
+		if (batch_page_fault > 0 && !vcpu->arch.apf.host_apf_flags) {
+			// Try to prefault nearby pages
+			for (batch_count = 1; batch_count < batch_page_fault; batch_count++) {
+				// Check both forward and backward from fault address
+				if (batch_count % 2 == 1) {
+					// Forward page
+					next_addr = pvm->exit_cr2 + (batch_count / 2 + 1) * PAGE_SIZE;
+				} else {
+					// Backward page
+					next_addr = pvm->exit_cr2 - (batch_count / 2) * PAGE_SIZE;
+				}
+
+				// Skip if this would be a noncanonical address
+				if (pvm_disallowed_va(vcpu, next_addr))
+					continue;
+				
+				if (kvm_mmu_page_fault(vcpu, next_addr, error_code, NULL, 0))
+					break;
+			}
+		}
+
 		return kvm_handle_page_fault(vcpu, error_code, pvm->exit_cr2,
-			NULL, 0);
+						NULL, 0);
 	case GP_VECTOR:
 		if (is_smod(pvm) && handle_synthetic_instruction_pvm_cpuid(vcpu))
 			return 1;
