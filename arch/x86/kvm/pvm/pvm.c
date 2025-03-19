@@ -2324,7 +2324,7 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 		if (batch_page_fault > 0 && !pvm->prefetch_in_progress && !vcpu->arch.apf.host_apf_flags) {
 			// Try to prefault nearby pages
 			pvm->prefetch_in_progress = true;
-			slot = kvm_vcpu_gfn_to_memslot(vcpu, original_gfn);
+			slot = kvm_vcpu_gfn_to_memslot(vcpu, (pvm->exit_cr2  >> PAGE_SHIFT));
 			if (slot) {
 				for (batch_count = 1; batch_count <= batch_page_fault; batch_count++) {
 					prefetch_gfn = (pvm->exit_cr2  >> PAGE_SHIFT) + ((batch_count % 2) == 1 ? (batch_count / 2 + 1) : -(batch_count / 2));
