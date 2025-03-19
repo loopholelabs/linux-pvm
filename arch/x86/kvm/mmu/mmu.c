@@ -96,6 +96,9 @@ __MODULE_PARM_TYPE(nx_huge_pages_recovery_period_ms, "uint");
 static bool __read_mostly force_flush_and_sync_on_reuse;
 module_param_named(flush_on_reuse, force_flush_and_sync_on_reuse, bool, 0644);
 
+static uint __read_mostly pte_prefetch_num = 8;
+module_param_named(pte_prefetch, pte_prefetch_num, uint, 0644);
+
 /*
  * When setting this variable to true it enables Two-Dimensional-Paging
  * where the hardware walks 2 page tables:
@@ -116,7 +119,7 @@ static int max_huge_page_level __read_mostly;
 static int tdp_root_level __read_mostly;
 static int max_tdp_level __read_mostly;
 
-#define PTE_PREFETCH_NUM		32
+#define PTE_PREFETCH_NUM		(pte_prefetch_num)
 
 #include <trace/events/kvm.h>
 
@@ -3060,21 +3063,18 @@ static void direct_pte_prefetch(struct kvm_vcpu *vcpu, u64 *sptep)
 	 * actually accessed translations and prefetched, so disable pte
 	 * prefetch if accessed bits aren't available.
 	 */
-	if (sp_ad_disabled(sp)) {
+	if (sp_ad_disabled(sp))
 		return;
-	}
 
-	if (sp->role.level > PG_LEVEL_4K) {
+	if (sp->role.level > PG_LEVEL_4K)
 		return;
-	}
 
 	/*
 	 * If addresses are being invalidated, skip prefetching to avoid
 	 * accidentally prefetching those addresses.
 	 */
-	if (unlikely(vcpu->kvm->mmu_invalidate_in_progress)) {
+	if (unlikely(vcpu->kvm->mmu_invalidate_in_progress))
 		return;
-	}
 
 	__direct_pte_prefetch(vcpu, sp, sptep);
 }
@@ -5280,13 +5280,12 @@ static void shadow_mmu_init_context(struct kvm_vcpu *vcpu, struct kvm_mmu *conte
 	context->cpu_role.as_u64 = cpu_role.as_u64;
 	context->root_role.word = root_role.word;
 
-	if (!is_cr0_pg(context)) {
+	if (!is_cr0_pg(context))
 		nonpaging_init_context(context);
-	} else if (is_cr4_pae(context)) {
+	else if (is_cr4_pae(context))
 		paging64_init_context(context);
-	} else {
+	else
 		paging32_init_context(context);
-	}
 
 	reset_guest_paging_metadata(vcpu, context);
 	reset_shadow_zero_bits_mask(vcpu, context);
@@ -5459,13 +5458,12 @@ void kvm_init_mmu(struct kvm_vcpu *vcpu)
 	struct kvm_mmu_role_regs regs = vcpu_to_role_regs(vcpu);
 	union kvm_cpu_role cpu_role = kvm_calc_cpu_role(vcpu, &regs);
 
-	if (mmu_is_nested(vcpu)) {
+	if (mmu_is_nested(vcpu))
 		init_kvm_nested_mmu(vcpu, cpu_role);
-	} else if (tdp_enabled) {
+	else if (tdp_enabled)
 		init_kvm_tdp_mmu(vcpu, cpu_role);
-	} else {
+	else
 		init_kvm_softmmu(vcpu, cpu_role);
-	}
 }
 EXPORT_SYMBOL_GPL(kvm_init_mmu);
 
