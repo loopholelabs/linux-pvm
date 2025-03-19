@@ -5464,13 +5464,11 @@ void kvm_init_mmu(struct kvm_vcpu *vcpu)
 	union kvm_cpu_role cpu_role = kvm_calc_cpu_role(vcpu, &regs);
 
 	if (mmu_is_nested(vcpu)) {
-		printk(KERN_INFO "PVM: mmu is nested\n");
 		init_kvm_nested_mmu(vcpu, cpu_role);
 	} else if (tdp_enabled) {
 		printk(KERN_INFO "PVM: tdp is enabled\n");
 		init_kvm_tdp_mmu(vcpu, cpu_role);
 	} else {
-		printk(KERN_INFO "PVM: using softmmu\n");
 		init_kvm_softmmu(vcpu, cpu_role);
 	}
 }

@@ -3078,7 +3078,7 @@ static __init int hardware_setup(void)
 
 	pvm_set_cpu_caps();
 
-	kvm_configure_mmu(false, 0, 0, 0);
+	kvm_configure_mmu(true, 0, 0, 0);
 
 	enable_apicv = 0;
 
