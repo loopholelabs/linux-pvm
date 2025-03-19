@@ -312,10 +312,13 @@ static inline int kvm_mmu_do_page_fault(struct kvm_vcpu *vcpu, gpa_t cr2_or_gpa,
 	if (!prefetch)
 		vcpu->stat.pf_taken++;
 
-	if (IS_ENABLED(CONFIG_RETPOLINE) && fault.is_tdp)
+	if (IS_ENABLED(CONFIG_RETPOLINE) && fault.is_tdp) {
+		printk(KERN_INFO "PVM: using tdp page fault\n");
 		r = kvm_tdp_page_fault(vcpu, &fault);
-	else
+	} else {
+		printk(KERN_INFO "PVM: using custom page fault\n");
 		r = vcpu->arch.mmu->page_fault(vcpu, &fault);
+	}
 
 	if (fault.write_fault_to_shadow_pgtable && emulation_type)
 		*emulation_type |= EMULTYPE_WRITE_PF_TO_SP;
