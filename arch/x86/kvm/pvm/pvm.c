@@ -2291,7 +2291,8 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 		if (cpu_feature_enabled(X86_FEATURE_PKU) && (error_code & PFERR_PK_MASK))
 			return 1;
 
-		return kvm_handle_page_fault(vcpu, error_code, pvm->exit_cr2, NULL, 0);
+		return kvm_handle_page_fault(vcpu, error_code, pvm->exit_cr2,
+						 NULL, 0);
 	case GP_VECTOR:
 		if (is_smod(pvm) && handle_synthetic_instruction_pvm_cpuid(vcpu))
 			return 1;
