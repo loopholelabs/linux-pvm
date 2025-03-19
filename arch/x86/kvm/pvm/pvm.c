@@ -37,9 +37,6 @@ module_param_named(cpuid_intercept, enable_cpuid_intercept, bool, 0444);
 static bool __read_mostly enable_pgtbl_preload = 0;
 module_param_named(pgtbl_preload, enable_pgtbl_preload, bool, 0444);
 
-static int __read_mostly batch_page_fault = 0;
-module_param_named(batch_page_fault_max, batch_page_fault, int, 0644);
-
 static bool __read_mostly is_intel;
 
 static unsigned long host_idt_base;
@@ -2321,32 +2318,6 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 		if (cpu_feature_enabled(X86_FEATURE_PKU) && (error_code & PFERR_PK_MASK))
 			return 1;
 
-		if (batch_page_fault > 0 && !pvm->prefetch_in_progress && !vcpu->arch.apf.host_apf_flags) {
-			// Try to prefault nearby pages
-			pvm->prefetch_in_progress = true;
-			slot = kvm_vcpu_gfn_to_memslot(vcpu, (pvm->exit_cr2  >> PAGE_SHIFT));
-			if (slot) {
-				for (batch_count = 1; batch_count <= batch_page_fault; batch_count++) {
-					if (batch_count % 2 == 1) {
-						prefetch_addr = pvm->exit_cr2 + (batch_count / 2 + 1) * PAGE_SIZE;
-					} else {
-						prefetch_addr = pvm->exit_cr2 - (batch_count / 2) * PAGE_SIZE;
-					}
-
-					if (pvm_disallowed_va(vcpu, prefetch_addr))
-						continue;
-
-					prefetch_gfn = prefetch_addr  >> PAGE_SHIFT;
-					/* Check if the GFN is within the memory slot */
-					if (prefetch_gfn < slot->base_gfn || prefetch_gfn >= slot->base_gfn + slot->npages)
-						continue;
-
-					kvm_mmu_page_fault(vcpu, prefetch_addr, PFERR_USER_MASK, NULL, 0);
-				}
-			}
-			pvm->prefetch_in_progress = false;
-		}
-
 		return kvm_handle_page_fault(vcpu, error_code, pvm->exit_cr2,
 					     NULL, 0);
 	case GP_VECTOR:
@@ -2941,8 +2912,6 @@ static void pvm_vcpu_reset(struct kvm_vcpu *vcpu, bool init_event)
 	pvm->msr_rets_rip_plus2 = 0;
 	pvm->msr_switch_cr3 = 0;
 	pvm_set_default_msr_linear_address_range(pvm);
-
-	pvm->prefetch_in_progress = false;
 }
 
 static int pvm_vcpu_create(struct kvm_vcpu *vcpu)
