@@ -2334,7 +2334,7 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 				if (pvm_disallowed_va(vcpu, next_addr))
 					continue;
 			        
-				u64 prefetch_error_code = error_code & ~(PFERR_WRITE_MASK | PFERR_INSTR_MASK);
+				u64 prefetch_error_code = error_code & ~(PFERR_WRITE_MASK | PFERR_FETCH_MASK);
 	
 				if (kvm_mmu_page_fault(vcpu, next_addr, prefetch_error_code, NULL, 0))
 					break;
