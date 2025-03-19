@@ -244,39 +244,6 @@ static inline void pvm_standard_msr_star(struct vcpu_pvm *pvm)
 			((u64)__USER32_CS << 48);
 }
 
-static inline void __kvm_mmu_do_prefetch_page_fault(struct kvm_vcpu *vcpu, gpa_t cr2_or_gpa, u32 err)
-{
-	struct kvm_page_fault fault = {
-		.addr = cr2_or_gpa,
-		.error_code = err,
-		.exec = err & PFERR_FETCH_MASK,
-		.write = err & PFERR_WRITE_MASK,
-		.present = err & PFERR_PRESENT_MASK,
-		.rsvd = err & PFERR_RSVD_MASK,
-		.user = err & PFERR_USER_MASK,
-		.prefetch = true,
-		.is_tdp = likely(vcpu->arch.mmu->page_fault == kvm_tdp_page_fault),
-		.nx_huge_page_workaround_enabled = is_nx_huge_page_enabled(vcpu->kvm),
-		.max_level = KVM_MAX_HUGEPAGE_LEVEL,
-		.req_level = PG_LEVEL_4K,
-		.goal_level = PG_LEVEL_4K,
-	};
-	int r;
-
-	if (vcpu->arch.mmu->root_role.direct) {
-		fault.gfn = fault.addr >> PAGE_SHIFT;
-		fault.slot = kvm_vcpu_gfn_to_memslot(vcpu, fault.gfn);
-	}
-
-	if (IS_ENABLED(CONFIG_RETPOLINE) && fault.is_tdp)
-		r = kvm_tdp_page_fault(vcpu, &fault);
-	else
-		r = vcpu->arch.mmu->page_fault(vcpu, &fault);
-
-	if (r == RET_PF_FIXED)
-		vcpu->stat.pf_fixed++;
-}
-
 static bool try_to_convert_to_pvm_mode(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_pvm *pvm = to_pvm(vcpu);
@@ -2374,7 +2341,7 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 					if (prefetch_gfn < slot->base_gfn || prefetch_gfn >= slot->base_gfn + slot->npages)
 						continue;
 
-					__kvm_mmu_do_prefetch_page_fault(vcpu, prefetch_addr, PFERR_USER_MASK);
+					kvm_mmu_page_fault(vcpu, prefetch_addr, PFERR_USER_MASK, NULL, 0);
 				}
 			}
 			pvm->prefetch_in_progress = false;
