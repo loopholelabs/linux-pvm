@@ -5285,12 +5285,16 @@ static void shadow_mmu_init_context(struct kvm_vcpu *vcpu, struct kvm_mmu *conte
 	context->cpu_role.as_u64 = cpu_role.as_u64;
 	context->root_role.word = root_role.word;
 
-	if (!is_cr0_pg(context))
+	if (!is_cr0_pg(context)) {
+		printk(KERN_INFO "PVM: nonpaging context\n");
 		nonpaging_init_context(context);
-	else if (is_cr4_pae(context))
+	} else if (is_cr4_pae(context)) {
+		printk(KERN_INFO "PVM: paging64 context\n");
 		paging64_init_context(context);
-	else
+	} else {
+		printk(KERN_INFO "PVM: paging32 context\n");
 		paging32_init_context(context);
+	}
 
 	reset_guest_paging_metadata(vcpu, context);
 	reset_shadow_zero_bits_mask(vcpu, context);
@@ -5466,7 +5470,6 @@ void kvm_init_mmu(struct kvm_vcpu *vcpu)
 	if (mmu_is_nested(vcpu)) {
 		init_kvm_nested_mmu(vcpu, cpu_role);
 	} else if (tdp_enabled) {
-		printk(KERN_INFO "PVM: tdp is enabled\n");
 		init_kvm_tdp_mmu(vcpu, cpu_role);
 	} else {
 		init_kvm_softmmu(vcpu, cpu_role);
