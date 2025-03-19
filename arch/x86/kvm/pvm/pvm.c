@@ -44,6 +44,8 @@ static bool __read_mostly is_intel;
 
 static unsigned long host_idt_base;
 
+static DEFINE_PER_CPU(bool, pvm_prefetch_in_progress);
+
 static inline bool is_smod(struct vcpu_pvm *pvm)
 {
 	unsigned long switch_flags = pvm->switch_flags;
@@ -2298,11 +2300,12 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 	struct vcpu_pvm *pvm = to_pvm(vcpu);
 	struct kvm_run *kvm_run = vcpu->run;
 	u64 next_addr;
-	u32 vector, error_code;
+	u32 vector, error_code, prefetch_error_code;
 	int batch_count, err;
 
 	vector = pvm->exit_vector;
 	error_code = pvm->exit_error_code;
+        prefetch_error_code = error_code & ~(PFERR_WRITE_MASK | PFERR_FETCH_MASK);
 
 	switch (vector) {
 	// #PF, #GP, #UD, #DB and #BP are guest exceptions or hypervisor
@@ -2318,8 +2321,9 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 		if (cpu_feature_enabled(X86_FEATURE_PKU) && (error_code & PFERR_PK_MASK))
 			return 1;
 
-		if (batch_page_fault > 0 && !vcpu->arch.apf.host_apf_flags) {
-			// Try to prefault nearby pages
+		if (batch_page_fault > 0 && !__this_cpu_read(pvm_prefetch_in_progress) && !vcpu->arch.apf.host_apf_flags) {
+			// Try to prefault nearby pagesi
+			__this_cpu_write(pvm_prefetch_in_progress, true);
 			for (batch_count = 1; batch_count < batch_page_fault; batch_count++) {
 				// Check both forward and backward from fault address
 				if (batch_count % 2 == 1) {
@@ -2334,11 +2338,10 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 				if (pvm_disallowed_va(vcpu, next_addr))
 					continue;
 			        
-				u64 prefetch_error_code = error_code & ~(PFERR_WRITE_MASK | PFERR_FETCH_MASK);
-	
 				if (kvm_mmu_page_fault(vcpu, next_addr, prefetch_error_code, NULL, 0))
 					break;
 			}
+			__this_cpu_write(pvm_prefetch_in_progress, false);
 		}
 
 		return kvm_handle_page_fault(vcpu, error_code, pvm->exit_cr2,
