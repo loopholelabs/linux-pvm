@@ -13,6 +13,7 @@
 
 #include <linux/module.h>
 #include <linux/entry-kvm.h>
+#include <linux/kvm_host.h>
 
 #include <asm/gsseg.h>
 #include <asm/io_bitmap.h>
