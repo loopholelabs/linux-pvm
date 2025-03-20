@@ -2100,45 +2100,57 @@ static void mmu_pages_clear_parents(struct mmu_page_path *parents)
 }
 
 static int mmu_sync_children(struct kvm_vcpu *vcpu,
-			     struct kvm_mmu_page *parent, bool can_yield)
+                            struct kvm_mmu_page *parent, bool can_yield)
 {
-	int i;
-	struct kvm_mmu_page *sp;
-	struct mmu_page_path parents;
-	struct kvm_mmu_pages pages;
-	LIST_HEAD(invalid_list);
-	bool flush = false;
+    int i;
+    struct kvm_mmu_page *sp;
+    struct mmu_page_path parents;
+    struct kvm_mmu_pages pages;
+    LIST_HEAD(invalid_list);
+    bool flush = false;
+    int batch_count = 0;
+    const int max_batch = 64; // Process up to 64 pages before flushing
 
-	while (mmu_unsync_walk(parent, &pages)) {
-		bool protected = false;
+    while (mmu_unsync_walk(parent, &pages)) {
+        bool protected = false;
 
-		for_each_sp(pages, sp, parents, i)
-			protected |= kvm_vcpu_write_protect_gfn(vcpu, sp->gfn);
+        for_each_sp(pages, sp, parents, i) {
+            protected |= kvm_vcpu_write_protect_gfn(vcpu, sp->gfn);
+            batch_count++;
+        }
 
-		if (protected) {
-			kvm_mmu_remote_flush_or_zap(vcpu->kvm, &invalid_list, true);
-			flush = false;
-		}
+        if (protected) {
+            kvm_mmu_remote_flush_or_zap(vcpu->kvm, &invalid_list, true);
+            flush = false;
+            batch_count = 0;
+        }
 
-		for_each_sp(pages, sp, parents, i) {
-			kvm_unlink_unsync_page(vcpu->kvm, sp);
-			flush |= kvm_sync_page(vcpu, sp, &invalid_list) > 0;
-			mmu_pages_clear_parents(&parents);
-		}
-		if (need_resched() || rwlock_needbreak(&vcpu->kvm->mmu_lock)) {
-			kvm_mmu_remote_flush_or_zap(vcpu->kvm, &invalid_list, flush);
-			if (!can_yield) {
-				kvm_make_request(KVM_REQ_MMU_SYNC, vcpu);
-				return -EINTR;
-			}
+        for_each_sp(pages, sp, parents, i) {
+            kvm_unlink_unsync_page(vcpu->kvm, sp);
+            flush |= kvm_sync_page(vcpu, sp, &invalid_list) > 0;
+            mmu_pages_clear_parents(&parents);
+        }
 
-			cond_resched_rwlock_write(&vcpu->kvm->mmu_lock);
-			flush = false;
-		}
-	}
+        // Only flush when we've accumulated enough pages or need to yield
+        if (batch_count >= max_batch ||
+            need_resched() || rwlock_needbreak(&vcpu->kvm->mmu_lock)) {
+            kvm_mmu_remote_flush_or_zap(vcpu->kvm, &invalid_list, flush);
+            if (!can_yield) {
+                kvm_make_request(KVM_REQ_MMU_SYNC, vcpu);
+                return -EINTR;
+            }
 
-	kvm_mmu_remote_flush_or_zap(vcpu->kvm, &invalid_list, flush);
-	return 0;
+            cond_resched_rwlock_write(&vcpu->kvm->mmu_lock);
+            flush = false;
+            batch_count = 0;
+        }
+    }
+
+    // Final flush if needed
+    if (flush || !list_empty(&invalid_list))
+        kvm_mmu_remote_flush_or_zap(vcpu->kvm, &invalid_list, flush);
+
+    return 0;
 }
 
 static void __clear_sp_write_flooding_count(struct kvm_mmu_page *sp)
