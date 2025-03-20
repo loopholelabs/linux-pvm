@@ -116,7 +116,7 @@ static int max_huge_page_level __read_mostly;
 static int tdp_root_level __read_mostly;
 static int max_tdp_level __read_mostly;
 
-#define PTE_PREFETCH_NUM		8
+#define PTE_PREFETCH_NUM		16
 
 #include <trace/events/kvm.h>
 
