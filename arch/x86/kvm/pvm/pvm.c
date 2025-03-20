@@ -616,6 +616,7 @@ static inline int index_to_host_pcid(int index)
 static int host_pcid_free_uncached(struct vcpu_pvm *pvm)
 {
 	struct host_pcid_state *tlb_state = this_cpu_ptr(&pvm_tlb_state);
+	int i, j;
 	bool is_uncached;
 
 	/* Find PCIDs associated with this pvm that aren't in active use */
@@ -624,9 +625,9 @@ static int host_pcid_free_uncached(struct vcpu_pvm *pvm)
 		if (tlb->pvm == pvm) {
 			is_uncached = true;
 			/* Check if root is not current or in previous roots */
-			if (tlb->root_hpa == pvm->vcpu.arch.mmu->root.hpa)
+			if (tlb->root_hpa == pvm->vcpu.arch.mmu->root.hpa) {
 				is_uncached = false;
-			else {
+			} else {
 				for (j = 0; j < KVM_MMU_NUM_PREV_ROOTS; j++) {
 					if (VALID_PAGE(pvm->vcpu.arch.mmu->prev_roots[j].hpa) &&
 						tlb->root_hpa == pvm->vcpu.arch.mmu->prev_roots[j].hpa) {
