@@ -1275,7 +1275,6 @@ static int pvm_set_msr(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 		 */
 		pvm->msr_vcpu_struct = data;
 		if (!data) {
-			printk(KERN_INFO "PVM: MSR invalid, removing direct switch\n");
 			pvm->switch_flags |= SWITCH_FLAGS_PVCS_INVALID;
 			kvm_gpc_deactivate(&pvm->pvcs_gpc);
 		} else {
@@ -1285,7 +1284,6 @@ static int pvm_set_msr(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 			 * request is being set. Therefore, it must be valid
 			 * before VM entry or a triple fault will be triggered.
 			 */
-			printk(KERN_INFO "PVM: MSR valid, enabling direct switch\n");
 			pvm->switch_flags &= ~SWITCH_FLAGS_PVCS_INVALID;
 			if (kvm_gpc_activate(&pvm->pvcs_gpc, data, PAGE_SIZE))
 				kvm_make_request(KVM_REQ_GPC_REFRESH, vcpu);
