@@ -812,7 +812,6 @@ void kvm_mmu_gfn_disallow_lpage(const struct kvm_memory_slot *slot, gfn_t gfn)
 {
 	update_gfn_disallow_lpage_count(slot, gfn, 1);
 }
-EXPORT_SYMBOL_GPL(kvm_mmu_gfn_disallow_lpage);
 
 void kvm_mmu_gfn_allow_lpage(const struct kvm_memory_slot *slot, gfn_t gfn)
 {
@@ -1427,7 +1426,6 @@ bool kvm_mmu_slot_gfn_write_protect(struct kvm *kvm,
 
 	return write_protected;
 }
-EXPORT_SYMBOL_GPL(kvm_mmu_slot_gfn_write_protect);
 
 static bool kvm_vcpu_write_protect_gfn(struct kvm_vcpu *vcpu, u64 gfn)
 {
