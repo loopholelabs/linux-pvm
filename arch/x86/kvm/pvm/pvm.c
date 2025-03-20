@@ -37,7 +37,7 @@ module_param_named(cpuid_intercept, enable_cpuid_intercept, bool, 0444);
 static bool __read_mostly enable_pgtbl_preload = 0;
 module_param_named(pgtbl_preload, enable_pgtbl_preload, bool, 0444);
 
-static bool __read_mostly enable_wp_batching = true;
+static bool __read_mostly enable_wp_batching = false;
 module_param_named(wp_batching, enable_wp_batching, bool, 0644);
 
 static bool __read_mostly is_intel;
@@ -326,8 +326,8 @@ static int handle_non_pvm_mode(struct kvm_vcpu *vcpu)
 	struct vcpu_pvm *pvm = to_pvm(vcpu);
 	int ret = 1;
 	unsigned int count = 130;
-	gfn_t fault_gfn = 0;
 	bool wp_fault = false;
+	gfn_t fault_gfn;
 
 	if (try_to_convert_to_pvm_mode(vcpu))
 		return 1;
@@ -341,8 +341,7 @@ static int handle_non_pvm_mode(struct kvm_vcpu *vcpu)
 
 	// If it's a WP fault, try to batch process
 	if (wp_fault && enable_wp_batching) {
-		bool batched = handle_write_protected_batch(vcpu, fault_gfn);
-		if (batched) {
+		if (handle_write_protected_batch(vcpu, fault_gfn)) {
 			// If we successfully batched some pages, flush TLB once for all changes
 			kvm_make_request(KVM_REQ_TLB_FLUSH, vcpu);
 		}
