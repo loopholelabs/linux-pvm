@@ -877,10 +877,13 @@ static void pvm_set_host_cr3(struct vcpu_pvm *pvm)
 {
 	pvm_set_host_cr3_for_hypervisor(pvm);
 
-	if (static_cpu_has(X86_FEATURE_PCID))
+	if (static_cpu_has(X86_FEATURE_PCID)) {
+		printk(KERN_INFO "PVM: using host PCID\n");
 		pvm_set_host_cr3_for_guest_with_host_pcid(pvm);
-	else
+	} else {
+		printk(KERN_INFO "PVM: not using host PCID\n");
 		pvm_set_host_cr3_for_guest_without_host_pcid(pvm);
+	}
 }
 
 static void pvm_load_mmu_pgd(struct kvm_vcpu *vcpu, hpa_t root_hpa,
