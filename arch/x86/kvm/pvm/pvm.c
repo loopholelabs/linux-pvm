@@ -1907,9 +1907,6 @@ static int handle_synthetic_instruction_return(struct kvm_vcpu *vcpu, bool user)
 
 static int handle_hc_event_window(struct kvm_vcpu *vcpu)
 {
-	struct vcpu_pvm *pvm = to_pvm(vcpu);
-	struct pvm_vcpu_struct *pvcs;
-
 	kvm_make_request(KVM_REQ_EVENT, vcpu);
 
 	if (pvm_get_if_flag(vcpu)) {
