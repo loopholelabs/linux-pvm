@@ -791,7 +791,7 @@ static void pvm_pgtbl_preload_for_guest_with_host_pcid(struct vcpu_pvm *pvm, u64
 	}
 
 	for (i = 0; i < KVM_MMU_NUM_PREV_ROOTS; ++i) {
-		u64 prev_root_hpa = pvm->vcpu.arch.mmu->prev_roots[i].hpa;
+		prev_root_hpa = pvm->vcpu.arch.mmu->prev_roots[i].hpa;
 
 		if (VALID_PAGE(prev_root_hpa)) {
 			host_pcid = host_pcid_find(pvm, prev_root_hpa);
