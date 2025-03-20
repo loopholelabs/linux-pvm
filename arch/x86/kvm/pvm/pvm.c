@@ -877,13 +877,10 @@ static void pvm_set_host_cr3(struct vcpu_pvm *pvm)
 {
 	pvm_set_host_cr3_for_hypervisor(pvm);
 
-	if (static_cpu_has(X86_FEATURE_PCID)) {
-		printk(KERN_INFO "PVM: using host PCID\n");
+	if (static_cpu_has(X86_FEATURE_PCID))
 		pvm_set_host_cr3_for_guest_with_host_pcid(pvm);
-	} else {
-		printk(KERN_INFO "PVM: not using host PCID\n");
+	else
 		pvm_set_host_cr3_for_guest_without_host_pcid(pvm);
-	}
 }
 
 static void pvm_load_mmu_pgd(struct kvm_vcpu *vcpu, hpa_t root_hpa,
@@ -1278,6 +1275,7 @@ static int pvm_set_msr(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 		 */
 		pvm->msr_vcpu_struct = data;
 		if (!data) {
+			printk(KERN_INFO "PVM: MSR invalid, removing direct switch\n");
 			pvm->switch_flags |= SWITCH_FLAGS_PVCS_INVALID;
 			kvm_gpc_deactivate(&pvm->pvcs_gpc);
 		} else {
@@ -1287,6 +1285,7 @@ static int pvm_set_msr(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 			 * request is being set. Therefore, it must be valid
 			 * before VM entry or a triple fault will be triggered.
 			 */
+			printk(KERN_INFO "PVM: MSR valid, enabling direct switch\n");
 			pvm->switch_flags &= ~SWITCH_FLAGS_PVCS_INVALID;
 			if (kvm_gpc_activate(&pvm->pvcs_gpc, data, PAGE_SIZE))
 				kvm_make_request(KVM_REQ_GPC_REFRESH, vcpu);
