@@ -748,12 +748,12 @@ static void pvm_flush_hwtlb_gva(struct kvm_vcpu *vcpu, gva_t addr)
 
 static bool check_switch_cr3(struct vcpu_pvm *pvm, u64 switch_host_cr3)
 {
-//	u64 root = pvm->vcpu.arch.mmu->prev_roots[0].hpa;
+	u64 root = pvm->vcpu.arch.mmu->prev_roots[0].hpa;
 //
-//	if (pvm->vcpu.arch.mmu->prev_roots[0].pgd != pvm->msr_switch_cr3)
-//		return false;
-//	if (!VALID_PAGE(root))
-//		return false;
+	if (pvm->vcpu.arch.mmu->prev_roots[0].pgd != pvm->msr_switch_cr3)
+		return false;
+	if (!VALID_PAGE(root))
+		return false;
 //	if (host_pcid_owner(switch_host_cr3 & X86_CR3_PCID_MASK) != pvm)
 //		return false;
 //	if (host_pcid_root(switch_host_cr3 & X86_CR3_PCID_MASK) != root)
