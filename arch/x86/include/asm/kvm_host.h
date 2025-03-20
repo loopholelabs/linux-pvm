@@ -2069,7 +2069,6 @@ void kvm_mmu_free_roots(struct kvm *kvm, struct kvm_mmu *mmu,
 bool kvm_mmu_slot_gfn_write_protect(struct kvm *kvm,
 		struct kvm_memory_slot *slot, u64 gfn,
 		int min_level);
-void kvm_mmu_gfn_disallow_lpage(const struct kvm_memory_slot *slot, gfn_t gfn);
 void kvm_mmu_free_guest_mode_roots(struct kvm *kvm, struct kvm_mmu *mmu);
 gpa_t kvm_mmu_gva_to_gpa_read(struct kvm_vcpu *vcpu, gva_t gva,
 			      struct x86_exception *exception);
