@@ -86,6 +86,8 @@ int host_mmu_init(void);
 #define MIN_HOST_PCID_FOR_GUEST			HOST_PCID_TAG_FOR_GUEST
 #define NUM_HOST_PCID_FOR_GUEST			HOST_PCID_TAG_FOR_GUEST
 
+#define WP_BATCH_MAX_PAGES  16  /* Maximum pages to process in one batch */
+
 struct vcpu_pvm {
 	struct kvm_vcpu vcpu;
 

@@ -13,6 +13,7 @@
 
 #include <linux/module.h>
 #include <linux/entry-kvm.h>
+#include <linux/minmax.h>
 
 #include <asm/gsseg.h>
 #include <asm/io_bitmap.h>
@@ -36,9 +37,51 @@ module_param_named(cpuid_intercept, enable_cpuid_intercept, bool, 0444);
 static bool __read_mostly enable_pgtbl_preload = 0;
 module_param_named(pgtbl_preload, enable_pgtbl_preload, bool, 0444);
 
+static bool __read_mostly enable_wp_batching = true;
+module_param_named(wp_batching, enable_wp_batching, bool, 0644);
+
 static bool __read_mostly is_intel;
 
 static unsigned long host_idt_base;
+
+static bool handle_write_protected_batch(struct kvm_vcpu *vcpu, gfn_t fault_gfn)
+{
+	struct kvm_memory_slot *slot;
+	gfn_t batch_start, batch_end, gfn;
+	int processed = 0;
+	bool ret = false;
+
+	if (!enable_wp_batching)
+		return false;
+
+	slot = kvm_vcpu_gfn_to_memslot(vcpu, fault_gfn);
+	if (!slot)
+		return false;
+
+	// Align to a reasonable boundary (16 pages)
+	batch_start = (fault_gfn >> 4) << 4;
+	batch_end = batch_start + WP_BATCH_MAX_PAGES;
+
+	// Ensure we don't go beyond the memory slot boundaries
+	batch_start = max(batch_start, slot->base_gfn);
+	batch_end = min(batch_end, slot->base_gfn + slot->npages);
+
+	// Batch unprotect pages around the faulting GFN
+	for (gfn = batch_start; gfn < batch_end && processed < WP_BATCH_MAX_PAGES; gfn++) {
+		if (gfn == fault_gfn) {
+			processed++;
+			continue; // Skip the original fault GFN as it's handled separately
+		}
+
+		if (kvm_mmu_slot_gfn_write_protect(vcpu->kvm, slot, gfn, PG_LEVEL_4K)) {
+			kvm_mmu_gfn_disallow_lpage(slot, gfn);
+			processed++;
+			ret = true;
+		}
+	}
+
+	return ret;
+}
 
 static inline bool is_smod(struct vcpu_pvm *pvm)
 {
@@ -283,9 +326,27 @@ static int handle_non_pvm_mode(struct kvm_vcpu *vcpu)
 	struct vcpu_pvm *pvm = to_pvm(vcpu);
 	int ret = 1;
 	unsigned int count = 130;
+	gfn_t fault_gfn = 0;
+	bool wp_fault = false;
 
 	if (try_to_convert_to_pvm_mode(vcpu))
 		return 1;
+
+	// Check if this might be a write-protection fault
+	if (vcpu->arch.cr2) {
+		fault_gfn = vcpu->arch.cr2 >> PAGE_SHIFT;
+		wp_fault = (vcpu->arch.exit_qualification & 0x2) &&
+				   !(vcpu->arch.exit_qualification & 0x1); // Write fault to present page
+	}
+
+	// If it's a WP fault, try to batch process
+	if (wp_fault && enable_wp_batching) {
+		bool batched = handle_write_protected_batch(vcpu, fault_gfn);
+		if (batched) {
+			// If we successfully batched some pages, flush TLB once for all changes
+			kvm_make_request(KVM_REQ_TLB_FLUSH, vcpu);
+		}
+	}
 
 	while (pvm->non_pvm_mode && count-- != 0) {
 		if (kvm_test_request(KVM_REQ_EVENT, vcpu))
