@@ -616,7 +616,8 @@ static inline int index_to_host_pcid(int index)
 static int host_pcid_free_uncached(struct vcpu_pvm *pvm)
 {
 	struct host_pcid_state *tlb_state = this_cpu_ptr(&pvm_tlb_state);
-	int i, j;
+	int i, j, least_recently_used = -1;
+	u64 least_recently_used_hpa = 0;
 	bool is_uncached;
 
 	/* Find PCIDs associated with this pvm that aren't in active use */
@@ -642,7 +643,20 @@ static int host_pcid_free_uncached(struct vcpu_pvm *pvm)
 				tlb->pvm = NULL;
 				return i;
 			}
+
+			/* Track least recently used (based on address) as fallback */
+			if (least_recently_used == -1 ||
+				tlb->root_hpa < least_recently_used_hpa) {
+				least_recently_used = i;
+				least_recently_used_hpa = tlb->root_hpa;
+			}
 		}
+	}
+
+	/* Return least recently used if no truly uncached entries found */
+	if (least_recently_used != -1) {
+		tlb_state->pairs[least_recently_used].pvm = NULL;
+		return least_recently_used;
 	}
 
 	/* It is allowed to do nothing. */
