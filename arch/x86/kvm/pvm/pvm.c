@@ -616,26 +616,30 @@ static inline int index_to_host_pcid(int index)
 static int host_pcid_free_uncached(struct vcpu_pvm *pvm)
 {
 	struct host_pcid_state *tlb_state = this_cpu_ptr(&pvm_tlb_state);
-	int i, least_recently_used = -1;
-	u64 least_recently_used_hpa = 0;
+	bool is_uncached;
 
 	/* Find PCIDs associated with this pvm that aren't in active use */
 	for (i = 0; i < NUM_HOST_PCID_FOR_GUEST; i++) {
 		struct host_pcid_one *tlb = &tlb_state->pairs[i];
 		if (tlb->pvm == pvm) {
-  			/* Check if root is not current or in previous roots */
-			if (tlb->root_hpa != pvm->vcpu.arch.mmu->root.hpa &&
-				tlb->root_hpa != pvm->vcpu.arch.mmu->prev_roots[0].hpa) {
+			is_uncached = true;
+			/* Check if root is not current or in previous roots */
+			if (tlb->root_hpa == pvm->vcpu.arch.mmu->root.hpa)
+				is_uncached = false;
+			else {
+				for (j = 0; j < KVM_MMU_NUM_PREV_ROOTS; j++) {
+					if (VALID_PAGE(pvm->vcpu.arch.mmu->prev_roots[j].hpa) &&
+						tlb->root_hpa == pvm->vcpu.arch.mmu->prev_roots[j].hpa) {
+						is_uncached = false;
+						break;
+					}
+				}
+			}
+
+			if (is_uncached) {
 				/* This is an uncached entry we can reclaim */
 				tlb->pvm = NULL;
 				return i;
-			}
-            
-			/* Track least recently used as fallback */
-			if (least_recently_used == -1 ||
-				tlb->root_hpa < least_recently_used_hpa) {
-				least_recently_used = i;
-				least_recently_used_hpa = tlb->root_hpa;
 			}
 		}
 	}
