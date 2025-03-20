@@ -116,7 +116,7 @@ static int max_huge_page_level __read_mostly;
 static int tdp_root_level __read_mostly;
 static int max_tdp_level __read_mostly;
 
-#define PTE_PREFETCH_NUM		16
+#define PTE_PREFETCH_NUM		8
 
 #include <trace/events/kvm.h>
 
@@ -5634,7 +5634,7 @@ static bool detect_write_flooding(struct kvm_mmu_page *sp)
 		return false;
 
 	atomic_inc(&sp->write_flooding_count);
-	return atomic_read(&sp->write_flooding_count) >= 3;
+	return atomic_read(&sp->write_flooding_count) >= 12;
 }
 
 /*
