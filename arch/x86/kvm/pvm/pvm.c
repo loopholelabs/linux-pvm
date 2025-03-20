@@ -1913,21 +1913,10 @@ static int handle_hc_event_window(struct kvm_vcpu *vcpu)
 	kvm_make_request(KVM_REQ_EVENT, vcpu);
 
 	if (pvm_get_if_flag(vcpu)) {
-		pvm->switch_flags &= ~(SWITCH_FLAGS_IRQ_WIN | SWITCH_FLAGS_NMI_WIN);
-
-		/* Only clear the IP flag if there are actual pending interrupts */
-		pvcs = pvm_get_vcpu_struct(pvm);
-		if (!pvcs || !(pvcs->event_flags & PVM_EVENT_FLAGS_IP) ||
-			kvm_vcpu_has_events(vcpu)) {
-			pvm_event_flags_update(vcpu, 0, PVM_EVENT_FLAGS_IP | PVM_EVENT_FLAGS_EP);
-			} else {
-				/* Only clear EP flag if no pending interrupts */
-				pvm_event_flags_update(vcpu, 0, PVM_EVENT_FLAGS_EP);
-			}
-		if (pvcs)
-			pvm_put_vcpu_struct(pvm, false);
+		to_pvm(vcpu)->switch_flags &= ~(SWITCH_FLAGS_IRQ_WIN | SWITCH_FLAGS_NMI_WIN);
+		pvm_event_flags_update(vcpu, 0, PVM_EVENT_FLAGS_IP | PVM_EVENT_FLAGS_EP);
 	} else {
-		pvm->switch_flags &= ~SWITCH_FLAGS_NMI_WIN;
+		to_pvm(vcpu)->switch_flags &= ~SWITCH_FLAGS_NMI_WIN;
 		pvm_event_flags_update(vcpu, 0, PVM_EVENT_FLAGS_EP);
 	}
 
