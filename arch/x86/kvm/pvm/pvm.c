@@ -336,20 +336,6 @@ static inline void switch_to_smod(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_pvm *pvm = to_pvm(vcpu);
 
-	if ((pvm->switch_flags & SWITCH_FLAGS_NO_DS_CR3) == 0 && 
-        	pvm->msr_switch_cr3 == vcpu->arch.mmu->prev_roots[0].pgd) {
-        	/* CR3 is already preloaded in TSS, just toggle mode flag */
-        	pvm_switch_flags_toggle_mod(pvm);
-        	swap(pvm->msr_switch_cr3, vcpu->arch.cr3);
-
-        	pvm_write_guest_gs_base(pvm, pvm->msr_kernel_gs_base);
-        	kvm_rsp_write(vcpu, pvm->msr_supervisor_rsp);
-        
-        	pvm->hw_cs = __USER_CS;
-        	pvm->hw_ss = __USER_DS;
-        	return;
-    	}
-
 	pvm_switch_flags_toggle_mod(pvm);
 	kvm_mmu_new_pgd(vcpu, pvm->msr_switch_cr3);
 	swap(pvm->msr_switch_cr3, vcpu->arch.cr3);
@@ -366,15 +352,6 @@ static inline void switch_to_umod(struct kvm_vcpu *vcpu)
 	struct vcpu_pvm *pvm = to_pvm(vcpu);
 
 	pvm->msr_supervisor_rsp = kvm_rsp_read(vcpu);
-
-	/* Fast path optimization: check if we can skip page table reload */
-	if ((pvm->switch_flags & SWITCH_FLAGS_NO_DS_CR3) == 0 && 
-        	pvm->msr_switch_cr3 == vcpu->arch.mmu->prev_roots[0].pgd) {
-        	/* CR3 is already preloaded in TSS, just toggle mode flag */
-        	pvm_switch_flags_toggle_mod(pvm);
-        	swap(pvm->msr_switch_cr3, vcpu->arch.cr3);
-		return;
-	}
 
 	pvm_switch_flags_toggle_mod(pvm);
 	kvm_mmu_new_pgd(vcpu, pvm->msr_switch_cr3);
