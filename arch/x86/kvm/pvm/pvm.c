@@ -768,39 +768,17 @@ static void pvm_pgtbl_preload_for_guest_with_host_pcid(struct vcpu_pvm *pvm, u64
 {
 	u32 host_pcid;
 	u64 hw_cr3;
-	u64 prev_root_hpa;
-	int i;
+	u64 prev_root_hpa = pvm->vcpu.arch.mmu->prev_roots[0].hpa;
 
-	if (!enable_pgtbl_preload || *switch_host_cr3 == pvm->msr_switch_cr3)
-		return;
-
-	// First try exact match with recent roots (most efficient case)
-	for (i = 0; i < KVM_MMU_NUM_PREV_ROOTS; ++i) {
-		prev_root_hpa = pvm->vcpu.arch.mmu->prev_roots[i].hpa;
-
-		if (VALID_PAGE(prev_root_hpa) &&
-			pvm->vcpu.arch.mmu->prev_roots[i].pgd == pvm->msr_switch_cr3) {
-			host_pcid = host_pcid_find(pvm, prev_root_hpa);
-			if (host_pcid) {
-				hw_cr3 = prev_root_hpa | host_pcid;
-				this_cpu_write(cpu_tss_rw.tss_ex.umod_cr3, hw_cr3 | CR3_NOFLUSH);
-				*switch_host_cr3 = hw_cr3 | CR3_NOFLUSH;
-				return;
-			}
-		}
-	}
-
-	for (i = 0; i < KVM_MMU_NUM_PREV_ROOTS; ++i) {
-		prev_root_hpa = pvm->vcpu.arch.mmu->prev_roots[i].hpa;
-
-		if (VALID_PAGE(prev_root_hpa)) {
-			host_pcid = host_pcid_find(pvm, prev_root_hpa);
-			if (host_pcid) {
-				hw_cr3 = prev_root_hpa | host_pcid;
-				this_cpu_write(cpu_tss_rw.tss_ex.umod_cr3, hw_cr3 | CR3_NOFLUSH);
-				*switch_host_cr3 = hw_cr3 | CR3_NOFLUSH;
-				return;
-			}
+	if (enable_pgtbl_preload &&
+		VALID_PAGE(prev_root_hpa) &&
+		pvm->vcpu.arch.mmu->prev_roots[0].pgd == pvm->msr_switch_cr3 &&
+		*switch_host_cr3 != pvm->msr_switch_cr3) {
+		host_pcid = host_pcid_find(pvm, prev_root_hpa);
+		if (host_pcid) {
+			hw_cr3 = prev_root_hpa | host_pcid;
+			this_cpu_write(cpu_tss_rw.tss_ex.umod_cr3, hw_cr3 | CR3_NOFLUSH);
+			*switch_host_cr3 = hw_cr3 | CR3_NOFLUSH;
 		}
 	}
 
@@ -3262,7 +3240,7 @@ static void pvm_exit(void)
 }
 module_exit(pvm_exit);
 
-#define TLB_NR_DYN_ASIDS	6
+#define TLB_NR_DYN_ASIDS	32
 
 static int __init hardware_cap_check(void)
 {
