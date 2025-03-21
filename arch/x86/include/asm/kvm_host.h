@@ -428,7 +428,7 @@ struct kvm_mmu_root_info {
 #define KVM_MMU_ROOT_INFO_INVALID \
 	((struct kvm_mmu_root_info) { .pgd = INVALID_PAGE, .hpa = INVALID_PAGE })
 
-#define KVM_MMU_NUM_PREV_ROOTS 63
+#define KVM_MMU_NUM_PREV_ROOTS 31
 
 #define KVM_MMU_ROOT_CURRENT		BIT(0)
 #define KVM_MMU_ROOT_PREVIOUS(i)	BIT(1+i)
