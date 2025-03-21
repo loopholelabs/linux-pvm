@@ -756,10 +756,10 @@ static bool check_switch_cr3(struct vcpu_pvm *pvm, u64 switch_host_cr3)
 		return false;
 //	if (host_pcid_owner(switch_host_cr3 & X86_CR3_PCID_MASK) != pvm)
 //		return false;
-//	if (host_pcid_root(switch_host_cr3 & X86_CR3_PCID_MASK) != root)
-//		return false;
-//	if (root != (switch_host_cr3 & CR3_ADDR_MASK))
-//		return false;
+	if (host_pcid_root(switch_host_cr3 & X86_CR3_PCID_MASK) != root)
+		return false;
+	if (root != (switch_host_cr3 & CR3_ADDR_MASK))
+		return false;
 
 	return true;
 }
