@@ -5780,7 +5780,7 @@ static bool pv_mmu_update_spte(struct kvm_vcpu *vcpu, struct kvm_mmu_page *sp,
 
 	if (gpte_access & KVM_PV_MMU_PTE_NP) {
 		if (!is_shadow_present_pte(*sptep)) {
-        	/* Already not present, nothing to do */
+			/* Already not present, nothing to do */
 			return false;
 		}
 
