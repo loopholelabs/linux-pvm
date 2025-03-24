@@ -4007,8 +4007,8 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 		vcpu->arch.msr_kvm_poll_control = data;
 		break;
 	case MSR_KVM_PV_MMU_BUFFER:
-			if (!guest_pv_has(vcpu, KVM_FEATURE_PV_MMU))
-				return 1;
+		if (!guest_pv_has(vcpu, KVM_FEATURE_PV_MMU))
+			return 1;
 
 		if (!(data & KVM_MSR_ENABLED))
 			break;
