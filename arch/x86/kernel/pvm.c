@@ -365,14 +365,17 @@ static void __init pvm_pv_mmu_ops_init(void)
 	int r;
 
 	r = pvm_early_setup_pv_mmu();
-	if (r < 0)
+	if (r < 0) {
+		pr_warn("PVM: Failed to initialize PV MMU support, error %d\n", r);
 		return;
+	}
 
 	pv_ops.mmu.release_pte = pvm_release_pt;
 	pv_ops.mmu.set_pte = pvm_set_pte;
 	pv_ops.mmu.pte_update = pvm_pte_update;
 	pv_ops.cpu.start_context_switch = pvm_start_context_switch;
 	pv_mmu_enabled = true;
+	pr_info("PVM: PV MMU initialized successfully\n");
 }
 
 void __init pvm_early_event(struct pt_regs *regs)
@@ -654,6 +657,7 @@ void __init pvm_early_setup(void)
 	pv_ops.mmu.flush_tlb_user = pvm_flush_tlb_user;
 	pv_ops.mmu.flush_tlb_kernel = pvm_flush_tlb_kernel;
 	pv_ops.mmu.flush_tlb_one_user = pvm_flush_tlb_one_user;
+
 	pvm_pv_mmu_ops_init();
 
 	this_cpu_write(pvm_vcpu_struct.event_flags, PVM_EVENT_FLAGS_EF);
