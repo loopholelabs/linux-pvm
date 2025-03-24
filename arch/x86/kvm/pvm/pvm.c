@@ -3248,7 +3248,7 @@ static void pvm_exit(void)
 }
 module_exit(pvm_exit);
 
-#define TLB_NR_DYN_ASIDS	16
+#define TLB_NR_DYN_ASIDS	6
 
 static int __init hardware_cap_check(void)
 {
