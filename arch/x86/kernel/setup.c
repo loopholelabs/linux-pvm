@@ -718,6 +718,27 @@ static void __init x86_report_nx(void)
 	}
 }
 
+#ifdef CONFIG_X86_64
+static void __init x86_reserve_vmalloc_range(void)
+{
+       static struct vm_struct pvm;
+       unsigned long size = 32UL << 39;
+
+       if (pgtable_l5_enabled())
+               size = 32UL << 48;
+
+       pvm.addr = (void *)(VMALLOC_END + 1 - size);
+       pvm.size = size;
+       pvm.flags = VM_ALLOC | VM_NO_GUARD;
+
+       vm_area_add_early(&pvm);
+}
+#else
+static void __init x86_reserve_vmalloc_range(void)
+{
+}
+#endif
+
 /*
  * Determine if we were loaded by an EFI loader.  If so, then we have also been
  * passed the efi memmap, systab, etc., so we should use these data structures
@@ -960,6 +981,7 @@ void __init setup_arch(char **cmdline_p)
 	 * defined and before each memory section base is used.
 	 */
 	kernel_randomize_memory();
+	x86_reserve_vmalloc_range();
 
 #ifdef CONFIG_X86_32
 	/* max_low_pfn get updated here */
