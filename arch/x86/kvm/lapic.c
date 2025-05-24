@@ -3016,6 +3016,8 @@ int kvm_apic_set_state(struct kvm_vcpu *vcpu, struct kvm_lapic_state *s)
 		static_call_cond(kvm_x86_apicv_post_state_restore)(vcpu);
 		static_call_cond(kvm_x86_hwapic_irr_update)(vcpu, apic_find_highest_irr(apic));
 		static_call_cond(kvm_x86_hwapic_isr_update)(apic_find_highest_isr(apic));
+	} else {
+		apic->irr_pending = apic_search_irr(apic) != -1;
 	}
 	kvm_make_request(KVM_REQ_EVENT, vcpu);
 	if (ioapic_in_kernel(vcpu->kvm))
