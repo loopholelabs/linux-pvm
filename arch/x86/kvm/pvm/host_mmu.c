@@ -51,8 +51,9 @@ static int __init guest_address_space_init(void)
 		pml4_index_start = L4_PT_INDEX(PVM_GUEST_MAPPING_START);
 		pml4_index_end = L4_PT_INDEX(RAW_CPU_ENTRY_AREA_BASE);
 
-       pvm_va_range = find_vm_area((void *)(VMALLOC_END + 1 - DEFAULT_RANGE_L5_SIZE));
-       if (!pvm_va_range || pvm_va_range->size != DEFAULT_RANGE_L5_SIZE) {
+		pvm_va_range = get_vm_area_align(DEFAULT_RANGE_L5_SIZE, PT_L5_SIZE,
+						 VM_ALLOC|VM_NO_GUARD);
+		if (!pvm_va_range) {
 			pml5_index_start = 0x1ff;
 			pml5_index_end = 0x1ff;
 		} else {
@@ -61,8 +62,9 @@ static int __init guest_address_space_init(void)
 						     (u64)pvm_va_range->size);
 		}
 	} else {
-		pvm_va_range = find_vm_area((void *)(VMALLOC_END + 1 - DEFAULT_RANGE_L4_SIZE));
-		if (!pvm_va_range || pvm_va_range->size != DEFAULT_RANGE_L4_SIZE)
+		pvm_va_range = get_vm_area_align(DEFAULT_RANGE_L4_SIZE, PT_L4_SIZE,
+						 VM_ALLOC|VM_NO_GUARD);
+		if (!pvm_va_range)
 			return -1;
 
 		pml4_index_start = L4_PT_INDEX((u64)pvm_va_range->addr);
@@ -131,6 +133,8 @@ int __init host_mmu_init(void)
 
 void host_mmu_destroy(void)
 {
+	if (pvm_va_range)
+		free_vm_area(pvm_va_range);
 	if (host_mmu_root_pgd)
 		free_page((unsigned long)(void *)host_mmu_root_pgd);
 	if (host_mmu_la57_top_p4d)

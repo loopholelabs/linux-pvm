@@ -4,10 +4,6 @@
 
 #include <linux/const.h>
 
-typedef unsigned long long u64;
-typedef unsigned int u32;
-typedef unsigned short u16;
-
 /*
  * The CPUID instruction in PVM guest can't be trapped and emulated,
  * so PVM guest should use the following two instructions instead:
