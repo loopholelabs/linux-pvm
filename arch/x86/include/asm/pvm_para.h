@@ -5,10 +5,6 @@
 #include <linux/init.h>
 #include <uapi/asm/pvm_para.h>
 
-typedef unsigned long long u64;
-typedef unsigned int u32;
-typedef unsigned short u16;
-
 #ifndef __ASSEMBLY__
 typedef void (*idtentry_t)(struct pt_regs *regs);
 
