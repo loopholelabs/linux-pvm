@@ -4381,6 +4381,12 @@ int kvm_get_msr_common(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 	case MSR_IA32_P5_MC_ADDR:
 	case MSR_IA32_P5_MC_TYPE:
 	case MSR_IA32_MCG_CAP:
+	case MSR_KVM_PV_MMU_BUFFER:
+		if (!guest_pv_has(vcpu, KVM_FEATURE_PV_MMU))
+			return 1;
+
+		msr_info->data = vcpu->arch.pv_mmu.msr_val;
+		break;
 	case MSR_IA32_MCG_CTL:
 	case MSR_IA32_MCG_STATUS:
 	case MSR_IA32_MC0_CTL ... MSR_IA32_MCx_CTL(KVM_MAX_MCE_BANKS) - 1:
