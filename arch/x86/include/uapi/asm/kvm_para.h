@@ -42,6 +42,7 @@
 #define KVM_FEATURE_MSI_EXT_DEST_ID	15
 #define KVM_FEATURE_HC_MAP_GPA_RANGE	16
 #define KVM_FEATURE_MIGRATION_CONTROL	17
+#define KVM_FEATURE_PV_MMU		18
 
 #define KVM_HINTS_REALTIME      0
 
@@ -64,6 +65,7 @@
 #define MSR_KVM_ASYNC_PF_INT	0x4b564d06
 #define MSR_KVM_ASYNC_PF_ACK	0x4b564d07
 #define MSR_KVM_MIGRATION_CONTROL	0x4b564d08
+#define MSR_KVM_PV_MMU_BUFFER	0x4b564d09
 
 struct kvm_steal_time {
 	__u64 steal;
@@ -155,5 +157,18 @@ struct kvm_vcpu_pv_apf_data {
 #define KVM_PV_EOI_MASK (0x1 << KVM_PV_EOI_BIT)
 #define KVM_PV_EOI_ENABLED KVM_PV_EOI_MASK
 #define KVM_PV_EOI_DISABLED 0x0
+
+/*
+ * TLB flushing related flags for KVM_HC_PV_MMU_SET_PTES, it allows
+ * merge the TLB operations (hypercalls) into one hypercall.
+ */
+#define KVM_PV_MMU_TLB_FLUSH		_BITUL(0)
+#define KVM_PV_MMU_TLB_FLUSH_CURRENT	_BITUL(1)
+#define KVM_PV_MMU_INVLPG		_BITUL(2)
+#define KVM_PV_MMU_FLAGS_MASK		(_BITUL(12) - 1)
+
+#define KVM_PV_MMU_PTE_NP		_BITUL(0)
+#define KVM_PV_MMU_PTE_RO		_BITUL(1)
+#define KVM_PV_MMU_PTE_ALL		(KVM_PV_MMU_PTE_NP | KVM_PV_MMU_PTE_RO)
 
 #endif /* _UAPI_ASM_X86_KVM_PARA_H */

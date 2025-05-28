@@ -754,12 +754,15 @@ static bool check_switch_cr3(struct vcpu_pvm *pvm, u64 switch_host_cr3)
 		return false;
 	if (!VALID_PAGE(root))
 		return false;
-	if (host_pcid_owner(switch_host_cr3 & X86_CR3_PCID_MASK) != pvm)
-		return false;
-	if (host_pcid_root(switch_host_cr3 & X86_CR3_PCID_MASK) != root)
-		return false;
 	if (root != (switch_host_cr3 & CR3_ADDR_MASK))
 		return false;
+
+	if (static_cpu_has(X86_FEATURE_PCID)) {
+		if (host_pcid_owner(switch_host_cr3 & X86_CR3_PCID_MASK) != pvm)
+			return false;
+		if (host_pcid_root(switch_host_cr3 & X86_CR3_PCID_MASK) != root)
+			return false;
+	}
 
 	return true;
 }
@@ -785,24 +788,30 @@ static void pvm_pgtbl_preload_for_guest_with_host_pcid(struct vcpu_pvm *pvm, u64
 	return;
 }
 
-static void pvm_set_host_cr3_for_guest_with_host_pcid(struct vcpu_pvm *pvm)
+static void pvm_set_host_cr3_for_guest(struct vcpu_pvm *pvm)
 {
-	u64 root_hpa = pvm->vcpu.arch.mmu->root.hpa;
-	bool flush = false;
-	u32 host_pcid = host_pcid_get(pvm, root_hpa, &flush);
-	u64 hw_cr3 = root_hpa | host_pcid;
+	u64 hw_cr3 = __sme_set(pvm->vcpu.arch.mmu->root.hpa);
+	u64 enter_hw_cr3 = hw_cr3;
 	u64 switch_host_cr3;
 
-	if (!flush)
-		hw_cr3 |= CR3_NOFLUSH;
-	this_cpu_write(cpu_tss_rw.tss_ex.enter_cr3, hw_cr3);
+	if (static_cpu_has(X86_FEATURE_PCID)) {
+		bool flush = false;
+		u32 host_pcid = host_pcid_get(pvm, hw_cr3, &flush);
+
+		enter_hw_cr3 |= host_pcid;
+		if (!flush)
+			enter_hw_cr3 |= CR3_NOFLUSH;
+		hw_cr3 |= host_pcid | CR3_NOFLUSH;
+	}
+
+	this_cpu_write(cpu_tss_rw.tss_ex.enter_cr3, enter_hw_cr3);
 
 	if (is_smod(pvm)) {
-		this_cpu_write(cpu_tss_rw.tss_ex.smod_cr3, hw_cr3 | CR3_NOFLUSH);
+		this_cpu_write(cpu_tss_rw.tss_ex.smod_cr3, hw_cr3);
 		switch_host_cr3 = this_cpu_read(cpu_tss_rw.tss_ex.umod_cr3);
 		pvm_pgtbl_preload_for_guest_with_host_pcid(pvm, &switch_host_cr3);
 	} else {
-		this_cpu_write(cpu_tss_rw.tss_ex.umod_cr3, hw_cr3 | CR3_NOFLUSH);
+		this_cpu_write(cpu_tss_rw.tss_ex.umod_cr3, hw_cr3);
 		switch_host_cr3 = this_cpu_read(cpu_tss_rw.tss_ex.smod_cr3);
 	}
 
@@ -810,30 +819,6 @@ static void pvm_set_host_cr3_for_guest_with_host_pcid(struct vcpu_pvm *pvm)
 		pvm->switch_flags &= ~SWITCH_FLAGS_NO_DS_CR3;
 	else
 		pvm->switch_flags |= SWITCH_FLAGS_NO_DS_CR3;
-}
-
-static void pvm_set_host_cr3_for_guest_without_host_pcid(struct vcpu_pvm *pvm)
-{
-	u64 root_hpa = pvm->vcpu.arch.mmu->root.hpa;
-	u64 switch_root = 0;
-	u64 prev_root_hpa = pvm->vcpu.arch.mmu->prev_roots[0].hpa;
-
-	if (VALID_PAGE(prev_root_hpa) &&
-	    pvm->vcpu.arch.mmu->prev_roots[0].pgd == pvm->msr_switch_cr3) {
-		switch_root = prev_root_hpa;
-		pvm->switch_flags &= ~SWITCH_FLAGS_NO_DS_CR3;
-	} else {
-		pvm->switch_flags |= SWITCH_FLAGS_NO_DS_CR3;
-	}
-
-	this_cpu_write(cpu_tss_rw.tss_ex.enter_cr3, root_hpa);
-	if (is_smod(pvm)) {
-		this_cpu_write(cpu_tss_rw.tss_ex.smod_cr3, root_hpa);
-		this_cpu_write(cpu_tss_rw.tss_ex.umod_cr3, switch_root);
-	} else {
-		this_cpu_write(cpu_tss_rw.tss_ex.umod_cr3, root_hpa);
-		this_cpu_write(cpu_tss_rw.tss_ex.smod_cr3, switch_root);
-	}
 }
 
 static void pvm_set_host_cr3_for_hypervisor(struct vcpu_pvm *pvm)
@@ -854,11 +839,7 @@ static void pvm_set_host_cr3_for_hypervisor(struct vcpu_pvm *pvm)
 static void pvm_set_host_cr3(struct vcpu_pvm *pvm)
 {
 	pvm_set_host_cr3_for_hypervisor(pvm);
-
-	if (static_cpu_has(X86_FEATURE_PCID))
-		pvm_set_host_cr3_for_guest_with_host_pcid(pvm);
-	else
-		pvm_set_host_cr3_for_guest_without_host_pcid(pvm);
+	pvm_set_host_cr3_for_guest(pvm);
 }
 
 static void pvm_load_mmu_pgd(struct kvm_vcpu *vcpu, hpa_t root_hpa,
@@ -2212,6 +2193,19 @@ static int handle_exit_breakpoint(struct kvm_vcpu *vcpu)
 	return 1;
 }
 
+static void handle_cpuid(struct kvm_vcpu *vcpu)
+{
+	u32 eax, ebx, ecx, edx;
+
+	eax = kvm_rax_read(vcpu);
+	ecx = kvm_rcx_read(vcpu);
+	kvm_cpuid(vcpu, &eax, &ebx, &ecx, &edx, false);
+	kvm_rax_write(vcpu, eax);
+	kvm_rbx_write(vcpu, ebx);
+	kvm_rcx_write(vcpu, ecx);
+	kvm_rdx_write(vcpu, edx);
+}
+
 static bool handle_synthetic_instruction_pvm_cpuid(struct kvm_vcpu *vcpu)
 {
 	/* invlpg 0xffffffffff4d5650; cpuid; */
@@ -2222,24 +2216,37 @@ static bool handle_synthetic_instruction_pvm_cpuid(struct kvm_vcpu *vcpu)
 	if (kvm_read_guest_virt(vcpu, kvm_get_linear_rip(vcpu),
 				insns, sizeof(insns), &e) == 0 &&
 	    memcmp(insns, pvm_synthetic_cpuid_insns, sizeof(insns)) == 0) {
-		u32 eax, ebx, ecx, edx;
-
 		if (unlikely(pvm_guest_allowed_va(vcpu, PVM_SYNTHETIC_CPUID_ADDRESS)))
 			kvm_mmu_invlpg(vcpu, PVM_SYNTHETIC_CPUID_ADDRESS);
 
-		eax = kvm_rax_read(vcpu);
-		ecx = kvm_rcx_read(vcpu);
-		kvm_cpuid(vcpu, &eax, &ebx, &ecx, &edx, false);
-		kvm_rax_write(vcpu, eax);
-		kvm_rbx_write(vcpu, ebx);
-		kvm_rcx_write(vcpu, ecx);
-		kvm_rdx_write(vcpu, edx);
-
+		handle_cpuid(vcpu);
 		kvm_rip_write(vcpu, kvm_rip_read(vcpu) + sizeof(insns));
 		return true;
 	}
 
 	return false;
+}
+
+/*
+ * Handle the guest initiated #VE.
+ *
+ * Only EXIT_REASON_CPUID is allowed for now, see virt_exception_user()
+ * in arch/x86/coco/tdx/tdx.c.
+ */
+static void handle_exit_virtual_exception(struct kvm_vcpu *vcpu)
+{
+	struct vcpu_pvm *pvm = to_pvm(vcpu);
+
+	switch (pvm->exit_ve.exit_reason) {
+	case EXIT_REASON_CPUID:
+		handle_cpuid(vcpu);
+		kvm_rip_write(vcpu, kvm_rip_read(vcpu) + pvm->exit_ve.instr_len);
+		break;
+	default:
+		pr_warn("Unexpected #VE: %lld\n", pvm->exit_ve.exit_reason);
+		kvm_queue_exception_e(vcpu, GP_VECTOR, 0);
+		break;
+	}
 }
 
 static int handle_exit_exception(struct kvm_vcpu *vcpu)
@@ -2315,8 +2322,8 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu)
 		// NMI is handled by pvm_vcpu_run_noinstr().
 		return 1;
 	case VE_VECTOR:
-		// TODO: tdx_handle_virt_exception(regs, &pvm->exit_ve); break;
-		goto unknown_exit_reason;
+		handle_exit_virtual_exception(vcpu);
+		return 1;
 	case X86_TRAP_VC:
 		// TODO: handle the second part for #VC.
 		goto unknown_exit_reason;
